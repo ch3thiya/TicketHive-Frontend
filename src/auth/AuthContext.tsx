@@ -8,7 +8,7 @@ const oidcConfig = {
   client_id: import.meta.env.VITE_ASGARDEO_CLIENT_ID || 'YOUR_ASGARDEO_SPA_CLIENT_ID',
   redirect_uri: window.location.origin,
   response_type: 'code',
-  scope: 'openid profile email',
+  scope: 'openid profile email groups',
   userStore: new WebStorageStateStore({ store: window.localStorage }),
   automaticSilentRenew: true,
   
@@ -42,6 +42,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const accessToken = oidc.user?.access_token || null;
   const profile = (oidc.user?.profile as any) || {};
+
+  // Log token claims to help debug in browser developer console
+  if (oidc.isAuthenticated) {
+    console.log("Token Claims Profile:", profile);
+  }
 
   // Extract Email
   const email = (profile.email as string) || (profile.sub as string) || null;

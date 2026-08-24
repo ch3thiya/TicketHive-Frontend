@@ -28,10 +28,16 @@ function App() {
   // Redirect users on successful login based on their role
   useEffect(() => {
     if (isAuthenticated) {
-      if (role === 'admin' && (currentPath === '/admin-login' || currentPath === '/login')) {
-        navigateTo('/admin-dashboard');
-      } else if (currentPath === '/login' || currentPath === '/admin-login') {
-        navigateTo('/'); // Redirect customers to home page
+      if (role === 'admin') {
+        // If logged in as admin, send to dashboard if currently on home or login pages
+        if (currentPath === '/' || currentPath === '/admin-login' || currentPath === '/login') {
+          navigateTo('/admin-dashboard');
+        }
+      } else {
+        // Send regular customers/organizers back to homepage if they are on login screens
+        if (currentPath === '/login' || currentPath === '/admin-login') {
+          navigateTo('/');
+        }
       }
     }
   }, [isAuthenticated, role, currentPath]);

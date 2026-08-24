@@ -112,7 +112,7 @@ export const AdminDashboard: React.FC = () => {
           <p className="font-body text-ink-gray-70 mb-6">
             You must be logged in as an administrator to view this page.
           </p>
-          <Button variant="primary" onClick={() => window.location.href = '/login'}>
+          <Button variant="primary" onClick={() => { window.history.pushState({}, '', '/admin-login'); window.dispatchEvent(new PopStateEvent('popstate')); }}>
             Log In as Admin
           </Button>
         </div>
