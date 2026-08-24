@@ -15,7 +15,7 @@ import { useAuth } from './auth/AuthContext';
 function App() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
-  const { isAuthenticated, role } = useAuth();
+  const { isAuthenticated, role, login, isLoading } = useAuth();
 
   useEffect(() => {
     const handlePopState = () => {
@@ -29,8 +29,9 @@ function App() {
   useEffect(() => {
     if (isAuthenticated) {
       if (role === 'admin') {
-        // If logged in as admin, send to dashboard if currently on home or login pages
-        if (currentPath === '/' || currentPath === '/admin-login' || currentPath === '/login') {
+        // Redirect to dashboard ONLY on login pages or during callback
+        const isCallback = window.location.search.includes('code=') && window.location.search.includes('state=');
+        if (currentPath === '/admin-login' || currentPath === '/login' || (currentPath === '/' && isCallback)) {
           navigateTo('/admin-dashboard');
         }
       } else {
@@ -92,6 +93,17 @@ function App() {
     return <Home />;
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-brand-white p-6">
+        <div className="flex flex-col items-center gap-4 animate-in fade-in duration-200">
+          <div className="w-12 h-12 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
+          <p className="font-body text-ink-black font-semibold text-sm">Verifying secure session...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-brand-white">
       {/* Back button for auth pages (no header, no footer) */}
@@ -109,7 +121,7 @@ function App() {
       {!isAuthRoute && (
         <Navbar
           onLogoClick={() => navigateTo('/')}
-          onLoginClick={() => navigateTo('/login')}
+          onLoginClick={login}
           onSignUpClick={() => setIsSignUpOpen(true)}
         />
       )}

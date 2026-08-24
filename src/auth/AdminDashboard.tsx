@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from './AuthContext';
-import { Button } from '../components/Button';
-import { Badge } from '../components/Badge';
+import { ArrowLeft, MapPin, Plus } from 'lucide-react';
 
 interface PendingRequest {
   requestId: string;
@@ -19,12 +18,23 @@ interface PendingRequest {
 
 const API_BASE_URL = 'http://localhost:5051';
 
+// Hardcoded managed venues list matching the new design layout
+const INITIAL_VENUES = [
+  { name: 'Madison Square Garden', location: 'New York, NY', capacity: '20,789' },
+  { name: 'SoFi Stadium', location: 'Inglewood, CA', capacity: '70,240' },
+  { name: 'Crypto.com Arena', location: 'Los Angeles, CA', capacity: '19,068' },
+  { name: 'Red Rocks Amphitheatre', location: 'Morrison, CO', capacity: '9,525' },
+  { name: 'United Center', location: 'Chicago, IL', capacity: '23,500' },
+  { name: 'Fenway Park', location: 'Boston, MA', capacity: '37,755' }
+];
+
 export const AdminDashboard: React.FC = () => {
   const { isAuthenticated, role, apiFetch, isLoading: authLoading } = useAuth();
   const [requests, setRequests] = useState<PendingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
+  const [venues, setVenues] = useState(INITIAL_VENUES);
 
   const fetchPendingRequests = async () => {
     setLoading(true);
@@ -59,7 +69,6 @@ export const AdminDashboard: React.FC = () => {
       });
 
       if (response.ok) {
-        alert('Organizer request approved successfully! 🎉');
         setRequests(prev => prev.filter(r => r.requestId !== requestId));
       } else {
         const data = await response.json().catch(() => ({}));
@@ -82,7 +91,6 @@ export const AdminDashboard: React.FC = () => {
       });
 
       if (response.ok) {
-        alert('Organizer request rejected.');
         setRequests(prev => prev.filter(r => r.requestId !== requestId));
       } else {
         const data = await response.json().catch(() => ({}));
@@ -95,112 +103,184 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const goBackToHome = () => {
+    window.history.pushState({}, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
+  const handleAddVenue = () => {
+    const name = prompt('Enter venue name:');
+    if (!name) return;
+    const location = prompt('Enter venue location (e.g. Las Vegas, NV):');
+    if (!location) return;
+    const capacity = prompt('Enter capacity (e.g. 15,000):');
+    if (!capacity) return;
+
+    setVenues(prev => [...prev, { name, location, capacity }]);
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-brand-white">
-        <p className="font-body text-ink-gray-70 animate-pulse">Checking credentials...</p>
+        <div className="w-12 h-12 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
 
   if (!isAuthenticated || role !== 'admin') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-brand-white p-6">
-        <div className="bg-brand-white border-3 border-ink-black rounded-28 shadow-soft-3d p-8 max-w-[480px] text-center">
-          <Badge variant="error" className="mb-4">Access Denied</Badge>
-          <h2 className="font-heading font-bold text-2xl text-ink-black mb-2">Administrator Access Required</h2>
-          <p className="font-body text-ink-gray-70 mb-6">
-            You must be logged in as an administrator to view this page.
-          </p>
-          <Button variant="primary" onClick={() => { window.history.pushState({}, '', '/admin-login'); window.dispatchEvent(new PopStateEvent('popstate')); }}>
-            Log In as Admin
-          </Button>
-        </div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-brand-white p-6 text-center">
+        <h2 className="font-heading font-bold text-2xl text-ink-black mb-2">Access Denied</h2>
+        <p className="font-body text-ink-gray-70 mb-4">You must be logged in as an administrator to view this portal.</p>
+        <button
+          onClick={goBackToHome}
+          className="font-body font-bold bg-brand-blue text-brand-white px-6 py-2.5 rounded-full border-3 border-ink-black shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all active:translate-y-px"
+        >
+          Go Back Home
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-brand-blue-light/20 p-8">
-      <div className="max-w-6xl mx-auto">
-        <header className="flex flex-col md:flex-row md:items-center justify-between mb-8 pb-6 border-b-2 border-ink-black/10 gap-4">
-          <div>
-            <h1 className="font-heading font-bold text-3xl text-ink-black mb-1">Admin Control Panel</h1>
-            <p className="font-body text-sm text-ink-gray-70">Review and manage pending Organizer requests.</p>
-          </div>
-          <Button variant="secondary" onClick={fetchPendingRequests} disabled={loading}>
-            Refresh Requests
-          </Button>
-        </header>
+    <div className="min-h-screen bg-[#F9F9FC] flex flex-col font-body">
+      
+      {/* 1. Admin-Specific Navbar */}
+      <nav className="w-full bg-brand-white border-b-3 border-ink-black sticky top-0 z-50">
+        <div className="max-w-8xl mx-auto px-6 h-[80px] flex items-center justify-between gap-4">
+          {/* Left: Back to Home Link */}
+          <button
+            onClick={goBackToHome}
+            className="font-body font-bold text-sm text-ink-black hover:text-brand-blue flex items-center gap-1.5 cursor-pointer select-none transition-colors"
+          >
+            <ArrowLeft size={16} strokeWidth={2.5} />
+            <span>Back to Home</span>
+          </button>
 
-        {error && (
-          <div className="bg-red-50 border-2 border-red-300 text-red-800 p-4 rounded-xl mb-6">
-            <p className="font-body text-sm font-semibold">{error}</p>
+          {/* Center: Admin Badge */}
+          <div className="bg-ink-black text-brand-white font-body font-bold text-[12px] uppercase tracking-[1.5px] px-6 py-1.5 rounded-full select-none">
+            Administrator
           </div>
-        )}
 
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-10 h-10 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
+          {/* Right: Brand Logo */}
+          <div className="font-heading font-extrabold text-[24px] text-brand-blue select-none">
+            TicketHive
           </div>
-        ) : requests.length === 0 ? (
-          <div className="bg-brand-white border-3 border-ink-black rounded-28 shadow-brutal p-12 text-center max-w-xl mx-auto mt-8">
-            <h3 className="font-heading font-bold text-xl mb-2 text-ink-black">No Pending Requests! 🏖️</h3>
-            <p className="font-body text-sm text-ink-gray-70">
-              All organizer signup requests have been reviewed. There is nothing pending approval at the moment.
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-6">
-            {requests.map(req => (
-              <div 
-                key={req.requestId} 
-                className="bg-brand-white border-3 border-ink-black rounded-28 shadow-brutal p-6 flex flex-col md:flex-row gap-6 justify-between items-start md:items-center transition-all duration-150 hover:shadow-soft-3d"
-              >
-                <div className="flex-grow space-y-3">
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <h3 className="font-heading font-bold text-lg text-ink-black">{req.organizationName}</h3>
-                    <Badge variant="active">{req.eventType}</Badge>
-                    <span className="font-body text-xs text-ink-gray-70">
-                      Submitted: {new Date(req.createdAt).toLocaleDateString()}
+        </div>
+      </nav>
+
+      {/* 2. Main Dashboard Area */}
+      <main className="flex-grow max-w-8xl w-full mx-auto px-6 py-8">
+        
+        {/* Title */}
+        <h1 className="font-heading font-bold text-[32px] text-ink-black mb-7 leading-none">
+          Platform Overview
+        </h1>
+
+        {/* 3. Pending Requests Card Box */}
+        <div className="bg-brand-white border-3 border-ink-black rounded-28 p-8 shadow-soft-3d mb-8">
+          <h2 className="font-heading font-bold text-[20px] text-ink-black mb-6">
+            Pending Organizer Requests
+          </h2>
+
+          {loading ? (
+            <div className="py-8 flex justify-center">
+              <div className="w-10 h-10 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : error ? (
+            <div className="bg-red-50 border-2 border-red-500 rounded-16 p-4 text-[#FF3B3B] font-medium text-sm">
+              {error}
+            </div>
+          ) : requests.length === 0 ? (
+            <div className="border-2 border-dashed border-ink-gray-30 rounded-20 py-12 text-center">
+              <p className="font-body text-ink-gray-70 font-medium">No pending organizer registration requests at this time.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-5">
+              {requests.map((req) => (
+                <div 
+                  key={req.requestId}
+                  className="bg-[#F9F9FC] border-2 border-ink-gray-30 rounded-20 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6"
+                >
+                  {/* Info details */}
+                  <div className="flex-1">
+                    <h3 className="font-body font-bold text-[16px] text-ink-black mb-0.5">
+                      {req.organizationName}
+                    </h3>
+                    <p className="font-body text-[13px] text-ink-gray-70 mb-3">
+                      {req.businessEmail} · {req.eventType}
+                    </p>
+                    <p className="font-body text-[14px] text-ink-black leading-relaxed max-w-[720px]">
+                      {req.about}
+                    </p>
+                  </div>
+
+                  {/* Actions & Timestamp */}
+                  <div className="flex items-center gap-6 shrink-0 max-md:w-full max-md:justify-between max-md:border-t max-md:border-ink-gray-30 max-md:pt-4">
+                    <span className="font-body text-[13px] text-ink-gray-70">
+                      2 days ago
                     </span>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1 font-body text-sm text-ink-gray-70">
-                    <p><span className="font-semibold text-ink-black">Contact:</span> {req.fullName}</p>
-                    <p><span className="font-semibold text-ink-black">Business Email:</span> {req.businessEmail}</p>
-                    <p><span className="font-semibold text-ink-black">Phone:</span> {req.phone}</p>
-                  </div>
-                  
-                  <div className="bg-brand-blue-light/10 border border-ink-black/10 rounded-xl p-3 max-w-2xl">
-                    <p className="font-body text-xs font-semibold text-ink-black mb-1">About the organizer:</p>
-                    <p className="font-body text-sm text-ink-gray-70 italic">"{req.about}"</p>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => handleReject(req.requestId)}
+                        disabled={actioningId === req.requestId}
+                        className="font-body font-bold text-[14px] text-[#FF3B3B] bg-brand-white border-2 border-ink-black rounded-full px-5 py-1.5 hover:bg-[#FF3B3B]/5 active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F]"
+                      >
+                        Reject
+                      </button>
+                      <button
+                        onClick={() => handleApprove(req.requestId)}
+                        disabled={actioningId === req.requestId}
+                        className="font-body font-bold text-[14px] text-brand-white bg-[#00B074] border-2 border-ink-black rounded-full px-5 py-1.5 hover:bg-[#009E66] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F]"
+                      >
+                        {actioningId === req.requestId ? 'Approving...' : 'Approve'}
+                      </button>
+                    </div>
                   </div>
                 </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-                <div className="flex md:flex-col gap-3 w-full md:w-auto shrink-0">
-                  <Button 
-                    variant="primary" 
-                    className="flex-1 md:w-32 bg-green-500 hover:bg-green-600 text-white"
-                    onClick={() => handleApprove(req.requestId)}
-                    disabled={actioningId === req.requestId}
-                  >
-                    {actioningId === req.requestId ? 'Processing...' : 'Approve'}
-                  </Button>
-                  <Button 
-                    variant="secondary" 
-                    className="flex-1 md:w-32 bg-red-100 hover:bg-red-200 text-red-600 border-red-300"
-                    onClick={() => handleReject(req.requestId)}
-                    disabled={actioningId === req.requestId}
-                  >
-                    Reject
-                  </Button>
+        {/* 4. Managed Venues Card Box */}
+        <div className="bg-brand-white border-3 border-ink-black rounded-28 p-8 shadow-soft-3d">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="font-heading font-bold text-[20px] text-ink-black">
+              Managed Venues
+            </h2>
+            <button
+              onClick={handleAddVenue}
+              className="font-body font-bold text-[13px] text-ink-black bg-[#FFE94D] border-2.5 border-ink-black rounded-full px-4 py-2 hover:bg-[#F3DC3C] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F] flex items-center gap-1.5"
+            >
+              <Plus size={14} strokeWidth={3} />
+              <span>Add Venue</span>
+            </button>
+          </div>
+
+          {/* Venue Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {venues.map((venue, idx) => (
+              <div 
+                key={idx}
+                className="bg-[#F9F9FC] border-2.5 border-ink-black rounded-16 p-5 flex flex-col gap-2 shadow-sm select-none hover:shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-y-px active:shadow-sm transition-all duration-150"
+              >
+                <h3 className="font-body font-bold text-[15px] text-ink-black">
+                  {venue.name}
+                </h3>
+                <div className="flex items-center gap-1 text-[13px] text-ink-gray-70">
+                  <MapPin size={13} className="text-[#FF3B3B] shrink-0" strokeWidth={2.5} />
+                  <span>{venue.location}</span>
+                </div>
+                <div className="font-body font-bold text-[13px] text-brand-blue mt-1">
+                  Capacity: {venue.capacity}
                 </div>
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </div>
+
+      </main>
     </div>
   );
 };

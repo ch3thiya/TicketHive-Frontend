@@ -1,5 +1,6 @@
 import React from 'react';
 import { Button } from '../components/Button';
+import { useAuth } from '../auth/AuthContext';
 
 interface NavbarProps {
   onSignUpClick: () => void;
@@ -12,6 +13,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLoginClick,
   onLogoClick,
 }) => {
+  const { isAuthenticated, logout, role, fullName } = useAuth();
+
   return (
     <nav className="w-full bg-brand-white border-b-3 border-ink-black sticky top-0 z-50">
       {/* Restrain content wrapper to 8xl (1440px) */}
@@ -54,21 +57,46 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Right Section: Auth buttons */}
         <div className="flex items-center gap-4 shrink-0">
-          <button
-            onClick={onLoginClick}
-            className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors cursor-pointer"
-          >
-            Log In
-          </button>
-          
-          <Button
-            variant="primary"
-            size="M"
-            shadow="S"
-            onClick={onSignUpClick}
-          >
-            Sign Up
-          </Button>
+          {isAuthenticated ? (
+            <>
+              {role === 'admin' && (
+                <button
+                  onClick={() => {
+                    window.history.pushState({}, '', '/admin-dashboard');
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                  }}
+                  className="font-body font-bold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors cursor-pointer mr-2 select-none"
+                >
+                  Dashboard
+                </button>
+              )}
+              
+              <button
+                onClick={logout}
+                className="font-body font-bold text-[14px] text-[#FF3B3B] bg-brand-white border-[2.5px] border-ink-black rounded-full px-5 py-2 hover:bg-[#FF3B3B]/5 active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F]"
+              >
+                Log Out
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={onLoginClick}
+                className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors cursor-pointer"
+              >
+                Log In
+              </button>
+              
+              <Button
+                variant="primary"
+                size="M"
+                shadow="S"
+                onClick={onSignUpClick}
+              >
+                Sign Up
+              </Button>
+            </>
+          )}
         </div>
         
       </div>

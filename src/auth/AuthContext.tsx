@@ -1,4 +1,4 @@
-import React, { createContext, useContext, type ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { useAuth as useOidcAuth, AuthProvider as OidcAuthProvider } from 'react-oidc-context';
 import { WebStorageStateStore } from 'oidc-client-ts';
 
@@ -7,6 +7,7 @@ const oidcConfig = {
   authority: 'https://api.asgardeo.io/t/orgvx6qo/oauth2/token',
   client_id: import.meta.env.VITE_ASGARDEO_CLIENT_ID || 'YOUR_ASGARDEO_SPA_CLIENT_ID',
   redirect_uri: window.location.origin,
+  post_logout_redirect_uri: window.location.origin,
   response_type: 'code',
   scope: 'openid profile email groups',
   userStore: new WebStorageStateStore({ store: window.localStorage }),
@@ -94,6 +95,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       headers
     });
   };
+
+  // Synchronize account with local PostgreSQL database upon successful login
+  useEffect(() => {
+    const syncAccount = async () => {
+      if (oidc.isAuthenticated && accessToken) {
+        try {
+          console.log("Syncing authenticated user account with backend database...");
+          const response = await apiFetch('http://localhost:5051/api/identity/accounts/sync', {
+            method: 'POST'
+          });
+          if (response.ok) {
+            console.log("Account synced successfully.");
+          } else {
+            console.warn("Account sync failed:", await response.text());
+          }
+        } catch (error) {
+          console.error("Error executing account sync:", error);
+        }
+      }
+    };
+    syncAccount();
+  }, [oidc.isAuthenticated, accessToken]);
 
   const value: AuthContextType = {
     isAuthenticated: oidc.isAuthenticated,
