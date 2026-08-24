@@ -125,3 +125,36 @@
   width: 100%;
 }
 
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Custom Neo-Brutalist Global Scrollbar */
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F9F9FC;
+  border-left: 3px solid #0A0A0F;
+  border-top: 3px solid #0A0A0F;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #0000FF;
+  border: 3px solid #0A0A0F;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #FFE94D;
+}
+

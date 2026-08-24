@@ -3,6 +3,7 @@ import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
 import { RequestSubmitted } from './RequestSubmitted';
+import { useAuth } from './AuthContext';
 
 interface RegisterProps {
   initialRole: 'customer' | 'organizer';
@@ -17,6 +18,7 @@ export const Register: React.FC<RegisterProps> = ({
   onNavigateToLogin,
   onNavigateToHome,
 }) => {
+  const { login } = useAuth();
   const [role, setRole] = useState<'customer' | 'organizer'>(initialRole);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export const Register: React.FC<RegisterProps> = ({
   const [about, setAbout] = useState('');
   const [organizerErrors, setOrganizerErrors] = useState<Record<string, string>>({});
 
-  const handleCustomerSubmit = (e: React.FormEvent) => {
+  const handleCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
@@ -57,12 +59,36 @@ export const Register: React.FC<RegisterProps> = ({
     if (!agree) newErrors.agree = 'You must agree to the Terms & Privacy Policy';
 
     setCustomerErrors(newErrors);
+    setApiError(null);
 
     if (Object.keys(newErrors).length === 0) {
-      // For standard customers, they sign up directly via WSO2 IS OIDC self-registration.
-      // So here we notify them to log in via the OIDC login portal.
-      alert(`Customer registration is handled securely via WSO2. Click OK to navigate to Login.`);
-      onNavigateToLogin();
+      setIsSubmitting(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/identity/accounts/register-customer`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fullName,
+            email,
+            password
+          }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          // Immediately redirect to Asgardeo secure login console after successful customer account creation
+          login();
+        } else {
+          setApiError(data.message || 'Customer registration failed.');
+        }
+      } catch (err) {
+        setApiError('Unable to connect to the authentication service. Please check if the backend is running.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -207,8 +233,8 @@ export const Register: React.FC<RegisterProps> = ({
               />
             </div>
 
-            <Button type="submit" variant="primary" className="mt-2 w-full">
-              Create Account
+            <Button type="submit" variant="primary" className="mt-2 w-full" disabled={isSubmitting}>
+              {isSubmitting ? 'Creating Account...' : 'Create Account'}
             </Button>
           </form>
         ) : (

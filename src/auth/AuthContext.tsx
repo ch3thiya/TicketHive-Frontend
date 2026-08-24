@@ -38,8 +38,11 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+import { useState } from 'react';
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const oidc = useOidcAuth();
+  const [dbUser, setDbUser] = useState<any>(null);
 
   const accessToken = oidc.user?.access_token || null;
   const profile = (oidc.user?.profile as any) || {};
@@ -56,24 +59,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const fullName = (profile.name as string) || (profile.given_name as string) || null;
 
   // Extract custom WSO2 claim 'isapproved' (fallback to standard profile paths)
-  let approvalStatus: 'pending' | 'approved' | 'rejected' | null = null;
+  let tokenApprovalStatus: 'pending' | 'approved' | 'rejected' | null = null;
   const isApprovedClaim = profile['isapproved'] || profile['urn:scim:schemas:extension:tickethive:2.0:User:isapproved'];
   if (isApprovedClaim) {
-    approvalStatus = isApprovedClaim.toString().toLowerCase() as any;
+    tokenApprovalStatus = isApprovedClaim.toString().toLowerCase() as any;
   }
 
-  // Extract Roles
-  let role: 'customer' | 'organizer' | 'admin' | null = null;
+  // Extract Roles from token
+  let tokenRole: 'customer' | 'organizer' | 'admin' | null = null;
   const rolesClaim = profile['roles'] || profile['groups'] || [];
   const roles = Array.isArray(rolesClaim) ? rolesClaim : [rolesClaim];
 
   if (roles.includes('Admin') || roles.includes('admin')) {
-    role = 'admin';
+    tokenRole = 'admin';
   } else if (roles.includes('Organizer') || roles.includes('organizer')) {
-    role = 'organizer';
+    tokenRole = 'organizer';
   } else if (oidc.isAuthenticated) {
-    role = 'customer'; // Default role for authenticated users
+    tokenRole = 'customer'; // Default role for authenticated users
   }
+
+  // Use database values as source of truth, falling back to OIDC token values
+  const role = dbUser ? (dbUser.role?.toLowerCase() as any) : tokenRole;
+  const approvalStatus = dbUser ? (dbUser.approvalStatus?.toLowerCase() as any) : tokenApprovalStatus;
 
   const login = async () => {
     await oidc.signinRedirect();
@@ -106,7 +113,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             method: 'POST'
           });
           if (response.ok) {
-            console.log("Account synced successfully.");
+            const data = await response.json();
+            setDbUser(data);
+            console.log("Account synced successfully:", data);
           } else {
             console.warn("Account sync failed:", await response.text());
           }

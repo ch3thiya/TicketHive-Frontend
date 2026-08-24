@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuth } from './AuthContext';
+import { useAuth } from '../auth/AuthContext';
 import { ArrowLeft, MapPin, Plus } from 'lucide-react';
 
 interface PendingRequest {
@@ -41,6 +41,11 @@ export const AdminDashboard: React.FC = () => {
   // Approved organizers list states
   const [organizers, setOrganizers] = useState<any[]>([]);
   const [orgsLoading, setOrgsLoading] = useState(true);
+
+  // Custom neo-brutalist delete modal states
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
+  const [deletingOrgName, setDeletingOrgName] = useState('');
 
   const [venues, setVenues] = useState(INITIAL_VENUES);
 
@@ -109,8 +114,6 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleReject = async (requestId: string) => {
-    if (!confirm('Are you sure you want to reject this organizer request? (Account will be permanently deleted)')) return;
-    
     setActioningId(requestId);
     setActionType('reject');
     try {
@@ -120,6 +123,7 @@ export const AdminDashboard: React.FC = () => {
 
       if (response.ok) {
         setRequests(prev => prev.filter(r => r.requestId !== requestId));
+        setIsDeleteModalOpen(false); // Close modal on success
       } else {
         const data = await response.json().catch(() => ({}));
         alert(data.message || 'Failed to reject request.');
@@ -251,11 +255,15 @@ export const AdminDashboard: React.FC = () => {
                     </span>
                     <div className="flex items-center gap-3">
                       <button
-                        onClick={() => handleReject(req.requestId)}
-                        disabled={actioningId === req.requestId}
+                        onClick={() => {
+                          setDeletingRequestId(req.requestId);
+                          setDeletingOrgName(req.organizationName);
+                          setIsDeleteModalOpen(true);
+                        }}
+                        disabled={actioningId !== null}
                         className="font-body font-bold text-[14px] text-[#FF3B3B] bg-brand-white border-2 border-ink-black rounded-full px-5 py-1.5 hover:bg-[#FF3B3B]/5 active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F]"
                       >
-                        {actioningId === req.requestId && actionType === 'reject' ? 'Rejecting...' : 'Reject'}
+                        Reject
                       </button>
                       <button
                         onClick={() => handleApprove(req.requestId)}
@@ -348,6 +356,52 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
       </main>
+
+      {/* 5. Custom Neo-Brutalist Reject Confirmation Modal */}
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0A0A0F]/60 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-brand-white border-3 border-ink-black rounded-32 shadow-soft-3d w-full max-w-[480px] p-8 flex flex-col items-center relative animate-in zoom-in-95 duration-200">
+            
+            {/* Warning Emoji Badge */}
+            <div className="w-16 h-16 rounded-full border-3 border-ink-black flex items-center justify-center bg-[#FF3B3B]/10 shadow-[3px_3px_0px_0px_#0A0A0F] text-2xl select-none mb-5 animate-bounce">
+              ⚠️
+            </div>
+
+            {/* Heading */}
+            <h2 className="font-heading font-bold text-[24px] text-ink-black text-center mb-2 leading-tight">
+              Delete Request?
+            </h2>
+            
+            {/* Warning Subtitle */}
+            <p className="font-body text-[14px] text-ink-gray-70 text-center mb-6 leading-relaxed">
+              Are you sure you want to reject the request for <span className="font-bold text-ink-black">{deletingOrgName}</span>? This will permanently delete their account from the system.
+            </p>
+
+            {/* Action buttons */}
+            <div className="flex gap-4 w-full">
+              <button
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setDeletingRequestId(null);
+                }}
+                disabled={actioningId !== null}
+                className="flex-1 font-body font-bold text-[14px] text-ink-black bg-brand-white border-2.5 border-ink-black rounded-full py-3 hover:bg-brand-blue-light transition-all cursor-pointer active:translate-y-px select-none text-center outline-none"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deletingRequestId && handleReject(deletingRequestId)}
+                disabled={actioningId !== null}
+                className="flex-1 font-body font-bold text-[14px] text-brand-white bg-[#FF3B3B] border-2.5 border-ink-black rounded-full py-3 hover:bg-[#E02424] transition-all cursor-pointer active:translate-y-[2px] shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F] outline-none"
+              >
+                {actioningId !== null && actionType === 'reject' ? 'Deleting...' : 'Delete & Reject'}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

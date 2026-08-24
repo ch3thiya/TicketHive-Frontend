@@ -3,7 +3,8 @@ import { Home } from './common/Home';
 import { Login } from './auth/Login';
 import { Register } from './auth/Register';
 import { AdminLogin } from './auth/AdminLogin';
-import { AdminDashboard } from './auth/AdminDashboard';
+import { AdminDashboard } from './dashboards/AdminDashboard';
+import { OrganizerDashboard } from './dashboards/OrganizerDashboard';
 import { Navbar } from './navigation/Navbar';
 import { Footer } from './navigation/Footer';
 import { SignUpPopUp } from './popUps/SignUpPopUp';
@@ -28,14 +29,19 @@ function App() {
   // Redirect users on successful login based on their role
   useEffect(() => {
     if (isAuthenticated) {
+      const isCallback = window.location.search.includes('code=') && window.location.search.includes('state=');
       if (role === 'admin') {
         // Redirect to dashboard ONLY on login pages or during callback
-        const isCallback = window.location.search.includes('code=') && window.location.search.includes('state=');
         if (currentPath === '/admin-login' || currentPath === '/login' || (currentPath === '/' && isCallback)) {
           navigateTo('/admin-dashboard');
         }
+      } else if (role === 'organizer') {
+        // Redirect organizers to their dashboard on login pages or during callback
+        if (currentPath === '/login' || (currentPath === '/' && isCallback)) {
+          navigateTo('/organizer-dashboard');
+        }
       } else {
-        // Send regular customers/organizers back to homepage if they are on login screens
+        // Send regular customers back to homepage if they are on login screens
         if (currentPath === '/login' || currentPath === '/admin-login') {
           navigateTo('/');
         }
@@ -59,7 +65,8 @@ function App() {
     currentPath === '/login' ||
     currentPath.startsWith('/register') ||
     currentPath === '/admin-login' ||
-    currentPath === '/admin-dashboard';
+    currentPath === '/admin-dashboard' ||
+    currentPath === '/organizer-dashboard';
 
   const renderContent = () => {
     if (currentPath === '/login') {
@@ -89,6 +96,10 @@ function App() {
       return <AdminDashboard />;
     }
 
+    if (currentPath === '/organizer-dashboard') {
+      return <OrganizerDashboard />;
+    }
+
     // Default route represents Home landing page
     return <Home />;
   };
@@ -106,8 +117,8 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-brand-white">
-      {/* Back button for auth pages (no header, no footer) */}
-      {isAuthRoute && (
+      {/* Back button for auth pages (no header, no footer), hidden on dashboard consoles */}
+      {isAuthRoute && currentPath !== '/admin-dashboard' && currentPath !== '/organizer-dashboard' && (
         <button
           onClick={() => navigateTo('/')}
           className="fixed top-6 left-6 z-[150] bg-brand-white text-ink-black font-body font-bold text-sm px-4 py-2.5 rounded-full border-3 border-ink-black shadow-brutal-s hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:shadow-[1px_1px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-px active:translate-y-px transition-all duration-150 cursor-pointer flex items-center gap-2 select-none"

@@ -70,6 +70,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                   Dashboard
                 </button>
               )}
+
+              {role === 'organizer' && (
+                <button
+                  onClick={() => {
+                    window.history.pushState({}, '', '/organizer-dashboard');
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                  }}
+                  className="font-body font-bold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors cursor-pointer mr-2 select-none"
+                >
+                  Dashboard
+                </button>
+              )}
               
               <button
                 onClick={logout}
