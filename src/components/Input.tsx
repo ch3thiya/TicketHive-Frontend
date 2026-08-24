@@ -1,4 +1,5 @@
-import React, { useId } from 'react';
+import React, { useId, useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement> {
   label: React.ReactNode;
@@ -16,6 +17,7 @@ export const Input: React.FC<InputProps> = ({
 }) => {
   const generatedId = useId();
   const inputId = id || generatedId;
+  const [showPassword, setShowPassword] = useState(false);
 
   // Custom checkbox layout
   if (type === 'checkbox') {
@@ -79,12 +81,32 @@ export const Input: React.FC<InputProps> = ({
       <label htmlFor={inputId} className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px]">
         {label}
       </label>
-      <input
-        id={inputId}
-        type={type}
-        className="font-body text-[15px] font-normal text-ink-black bg-brand-white border-3 border-ink-black rounded-16 py-3.5 px-4 w-full outline-none transition-all duration-150 ease-in-out placeholder-ink-gray-70 focus:border-brand-blue focus:shadow-brutal-s"
-        {...inputProps}
-      />
+      
+      {type === 'password' ? (
+        <div className="relative w-full">
+          <input
+            id={inputId}
+            type={showPassword ? 'text' : 'password'}
+            className="font-body text-[15px] font-normal text-ink-black bg-brand-white border-3 border-ink-black rounded-16 py-3.5 pl-4 pr-12 w-full outline-none transition-all duration-150 ease-in-out placeholder-ink-gray-70 focus:border-brand-blue focus:shadow-brutal-s"
+            {...inputProps}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((prev) => !prev)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-ink-gray-70 hover:text-ink-black transition-colors cursor-pointer focus:outline-none flex items-center justify-center"
+          >
+            {showPassword ? <EyeOff size={20} strokeWidth={2.5} /> : <Eye size={20} strokeWidth={2.5} />}
+          </button>
+        </div>
+      ) : (
+        <input
+          id={inputId}
+          type={type}
+          className="font-body text-[15px] font-normal text-ink-black bg-brand-white border-3 border-ink-black rounded-16 py-3.5 px-4 w-full outline-none transition-all duration-150 ease-in-out placeholder-ink-gray-70 focus:border-brand-blue focus:shadow-brutal-s"
+          {...inputProps}
+        />
+      )}
+
       {error && (
         <span className="font-body text-[13px] font-medium text-state-error mt-1">
           {error}

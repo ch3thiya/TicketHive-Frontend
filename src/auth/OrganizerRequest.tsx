@@ -39,7 +39,7 @@ export const OrganizerRequest: React.FC = () => {
           Start selling tickets
         </h2>
         <p className="font-body text-[15px] text-ink-gray-70 mb-6 leading-relaxed text-center">
-          Tell us a bit about your organization. Our team typically reviews requests within 1–2 business days.
+          Tell us a bit about your organization. Our team typically reviews requests within 1-2 business days.
         </p>
 
         <form className="w-full flex flex-col gap-4" onSubmit={handleSubmit}>

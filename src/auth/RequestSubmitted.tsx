@@ -24,7 +24,7 @@ export const RequestSubmitted: React.FC<RequestSubmittedProps> = ({
 
         {/* Subtitle / Details */}
         <p className="font-body text-[15px] text-ink-gray-70 mb-8 leading-relaxed max-w-[420px]">
-          We've received your organizer request. Keep an eye on your inbox — we'll notify you as soon as it's approved, usually within 1–2 business days.
+          We've received your organizer request. Keep an eye on your inbox — we'll notify you as soon as it's approved, usually within 1-2 business days.
         </p>
 
         {/* Action Button */}

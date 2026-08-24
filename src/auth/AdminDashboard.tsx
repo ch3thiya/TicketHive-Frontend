@@ -33,7 +33,15 @@ export const AdminDashboard: React.FC = () => {
   const [requests, setRequests] = useState<PendingRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Track button action loading states
   const [actioningId, setActioningId] = useState<string | null>(null);
+  const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
+  
+  // Approved organizers list states
+  const [organizers, setOrganizers] = useState<any[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState(true);
+
   const [venues, setVenues] = useState(INITIAL_VENUES);
 
   const fetchPendingRequests = async () => {
@@ -55,14 +63,31 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const fetchApprovedOrganizers = async () => {
+    setOrgsLoading(true);
+    try {
+      const response = await apiFetch(`${API_BASE_URL}/api/identity/organizer-requests/organizers`);
+      if (response.ok) {
+        const data = await response.json();
+        setOrganizers(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch organizers:', err);
+    } finally {
+      setOrgsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isAuthenticated && role === 'admin') {
       fetchPendingRequests();
+      fetchApprovedOrganizers();
     }
   }, [isAuthenticated, role]);
 
   const handleApprove = async (requestId: string) => {
     setActioningId(requestId);
+    setActionType('approve');
     try {
       const response = await apiFetch(`${API_BASE_URL}/api/identity/organizer-requests/${requestId}/approve`, {
         method: 'POST',
@@ -70,6 +95,7 @@ export const AdminDashboard: React.FC = () => {
 
       if (response.ok) {
         setRequests(prev => prev.filter(r => r.requestId !== requestId));
+        fetchApprovedOrganizers(); // Refresh active organizers list
       } else {
         const data = await response.json().catch(() => ({}));
         alert(data.message || 'Failed to approve request.');
@@ -78,13 +104,15 @@ export const AdminDashboard: React.FC = () => {
       alert('An error occurred. Please try again.');
     } finally {
       setActioningId(null);
+      setActionType(null);
     }
   };
 
   const handleReject = async (requestId: string) => {
-    if (!confirm('Are you sure you want to reject this organizer request?')) return;
+    if (!confirm('Are you sure you want to reject this organizer request? (Account will be permanently deleted)')) return;
     
     setActioningId(requestId);
+    setActionType('reject');
     try {
       const response = await apiFetch(`${API_BASE_URL}/api/identity/organizer-requests/${requestId}/reject`, {
         method: 'POST',
@@ -100,6 +128,7 @@ export const AdminDashboard: React.FC = () => {
       alert('An error occurred. Please try again.');
     } finally {
       setActioningId(null);
+      setActionType(null);
     }
   };
 
@@ -226,16 +255,54 @@ export const AdminDashboard: React.FC = () => {
                         disabled={actioningId === req.requestId}
                         className="font-body font-bold text-[14px] text-[#FF3B3B] bg-brand-white border-2 border-ink-black rounded-full px-5 py-1.5 hover:bg-[#FF3B3B]/5 active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F]"
                       >
-                        Reject
+                        {actioningId === req.requestId && actionType === 'reject' ? 'Rejecting...' : 'Reject'}
                       </button>
                       <button
                         onClick={() => handleApprove(req.requestId)}
                         disabled={actioningId === req.requestId}
                         className="font-body font-bold text-[14px] text-brand-white bg-[#00B074] border-2 border-ink-black rounded-full px-5 py-1.5 hover:bg-[#009E66] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F]"
                       >
-                        {actioningId === req.requestId ? 'Approving...' : 'Approve'}
+                        {actioningId === req.requestId && actionType === 'approve' ? 'Approving...' : 'Approve'}
                       </button>
                     </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 3.1 Current Approved Organizers Section */}
+        <div className="bg-brand-white border-3 border-ink-black rounded-28 p-8 shadow-soft-3d mb-8">
+          <h2 className="font-heading font-bold text-[20px] text-ink-black mb-6">
+            Current Organizers
+          </h2>
+
+          {orgsLoading ? (
+            <div className="py-8 flex justify-center">
+              <div className="w-10 h-10 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : organizers.length === 0 ? (
+            <div className="border-2 border-dashed border-ink-gray-30 rounded-20 py-8 text-center">
+              <p className="font-body text-ink-gray-70 font-medium">No approved organizers yet.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {organizers.map((org, idx) => (
+                <div 
+                  key={idx}
+                  className="bg-[#F9F9FC] border-2 border-ink-gray-30 rounded-20 p-5 flex items-center justify-between gap-4 shadow-sm"
+                >
+                  <div className="flex-1">
+                    <h3 className="font-body font-bold text-[15px] text-ink-black mb-0.5">
+                      {org.organizationName || org.fullName}
+                    </h3>
+                    <p className="font-body text-[12px] text-ink-gray-70">
+                      {org.businessEmail || org.email} · {org.eventType || 'All Events'}
+                    </p>
+                  </div>
+                  <div className="bg-brand-blue-light text-brand-blue text-[12px] font-bold px-4 py-1.5 rounded-full border-2 border-ink-black shrink-0">
+                    Active
                   </div>
                 </div>
               ))}

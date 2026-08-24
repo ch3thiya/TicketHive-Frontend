@@ -145,7 +145,7 @@ export const Register: React.FC<RegisterProps> = ({
         <p className="font-body text-[14px] text-ink-gray-70 mb-4 leading-relaxed text-center max-w-[400px]">
           {role === 'customer' 
             ? 'Sign up to start booking tickets for your favorite events.'
-            : 'Tell us a bit about your organization. Our team typically reviews requests within 1–2 business days.'
+            : 'Tell us a bit about your organization. Our team typically reviews requests within 1-2 business days.'
           }
         </p>
 
@@ -184,6 +184,9 @@ export const Register: React.FC<RegisterProps> = ({
               onChange={(e) => setPassword(e.target.value)}
               error={customerErrors.password}
             />
+            <p className="text-left text-xs text-ink-gray-70 -mt-2 mb-2 font-medium">
+              Password must be at least 8 characters, include at least 1 uppercase letter and 1 digit.
+            </p>
 
             <Input
               label="Confirm Password"
@@ -252,6 +255,9 @@ export const Register: React.FC<RegisterProps> = ({
                 className="flex-1"
               />
             </div>
+            <p className="text-left text-xs text-ink-gray-70 -mt-2 mb-2 font-medium">
+              Password must be at least 8 characters, include at least 1 uppercase letter and 1 digit.
+            </p>
 
             <div className="flex gap-4 w-full flex-col sm:flex-row">
               <Input
