@@ -2,21 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
+import { RequestSubmitted } from './RequestSubmitted';
 
 interface RegisterProps {
   initialRole: 'customer' | 'organizer';
   onNavigateToLogin: () => void;
+  onNavigateToHome: () => void;
 }
 
 export const Register: React.FC<RegisterProps> = ({
   initialRole,
   onNavigateToLogin,
+  onNavigateToHome,
 }) => {
   const [role, setRole] = useState<'customer' | 'organizer'>(initialRole);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
-  // Sync role state with prop changes (e.g. when navigated from PopUp)
   useEffect(() => {
     setRole(initialRole);
+    setIsSubmitted(false); // Reset submitted state on tab change/redirect
   }, [initialRole]);
 
   // Customer Form State
@@ -65,9 +69,13 @@ export const Register: React.FC<RegisterProps> = ({
     setOrganizerErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
-      alert(`Organizer Request submitted successfully for ${orgName}! 🚀`);
+      setIsSubmitted(true);
     }
   };
+
+  if (isSubmitted) {
+    return <RequestSubmitted onBack={onNavigateToHome} />;
+  }
 
   return (
     <div className="bg-blue-pattern min-h-screen flex items-center justify-center p-6">
@@ -96,31 +104,7 @@ export const Register: React.FC<RegisterProps> = ({
           }
         </p>
 
-        {/* Segmented control for signup type */}
-        <div className="w-full bg-brand-blue-light border-3 border-ink-black rounded-full p-[3px] flex items-center gap-1 mb-6">
-          <button
-            type="button"
-            onClick={() => setRole('customer')}
-            className={`flex-1 py-2 text-center rounded-full font-body text-sm cursor-pointer select-none transition-all duration-150 ${
-              role === 'customer'
-                ? 'bg-brand-blue text-brand-white font-bold shadow-[2px_2px_0px_0px_#0A0A0F]'
-                : 'text-ink-black font-semibold hover:bg-white/40'
-            }`}
-          >
-            Customer Signup
-          </button>
-          <button
-            type="button"
-            onClick={() => setRole('organizer')}
-            className={`flex-1 py-2 text-center rounded-full font-body text-sm cursor-pointer select-none transition-all duration-150 ${
-              role === 'organizer'
-                ? 'bg-brand-blue text-brand-white font-bold shadow-[2px_2px_0px_0px_#0A0A0F]'
-                : 'text-ink-black font-semibold hover:bg-white/40'
-            }`}
-          >
-            Organizer Request
-          </button>
-        </div>
+
 
         {/* Conditional Forms */}
         {role === 'customer' ? (

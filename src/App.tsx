@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Home } from './auth/Home';
+import { Home } from './common/Home';
 import { Login } from './auth/Login';
 import { Register } from './auth/Register';
 import { AdminLogin } from './auth/AdminLogin';
 import { Navbar } from './navigation/Navbar';
 import { Footer } from './navigation/Footer';
 import { SignUpPopUp } from './popUps/SignUpPopUp';
+import { ArrowLeft } from 'lucide-react';
 import './App.css';
 
 function App() {
@@ -52,6 +53,7 @@ function App() {
         <Register
           initialRole={initialRole}
           onNavigateToLogin={() => navigateTo('/login')}
+          onNavigateToHome={() => navigateTo('/')}
         />
       );
     }
@@ -70,9 +72,10 @@ function App() {
       {isAuthRoute && (
         <button
           onClick={() => navigateTo('/')}
-          className="fixed top-6 left-6 z-[150] bg-brand-white text-ink-black font-body font-bold text-sm px-4 py-2 rounded-full border-3 border-ink-black shadow-brutal-s hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:shadow-[1px_1px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-px active:translate-y-px transition-all duration-150 cursor-pointer flex items-center gap-1.5 select-none"
+          className="fixed top-6 left-6 z-[150] bg-brand-white text-ink-black font-body font-bold text-sm px-4 py-2.5 rounded-full border-3 border-ink-black shadow-brutal-s hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:shadow-[1px_1px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-px active:translate-y-px transition-all duration-150 cursor-pointer flex items-center gap-2 select-none"
         >
-          <span className="font-bold">←</span> Back to Home
+          <ArrowLeft size={16} strokeWidth={2.5} />
+          <span>Back to Home</span>
         </button>
       )}
 
