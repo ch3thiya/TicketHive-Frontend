@@ -10,6 +10,8 @@ interface RegisterProps {
   onNavigateToHome: () => void;
 }
 
+const API_BASE_URL = 'http://localhost:5051';
+
 export const Register: React.FC<RegisterProps> = ({
   initialRole,
   onNavigateToLogin,
@@ -17,17 +19,22 @@ export const Register: React.FC<RegisterProps> = ({
 }) => {
   const [role, setRole] = useState<'customer' | 'organizer'>(initialRole);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     setRole(initialRole);
     setIsSubmitted(false); // Reset submitted state on tab change/redirect
+    setApiError(null);
   }, [initialRole]);
 
-  // Customer Form State
+  // Common Credential States
   const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Customer Form State
+  const [email, setEmail] = useState('');
   const [agree, setAgree] = useState(false);
   const [customerErrors, setCustomerErrors] = useState<Record<string, string>>({});
 
@@ -52,14 +59,20 @@ export const Register: React.FC<RegisterProps> = ({
     setCustomerErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
-      alert(`Customer account created successfully for ${fullName}! 🎉`);
+      // For standard customers, they sign up directly via WSO2 IS OIDC self-registration.
+      // So here we notify them to log in via the OIDC login portal.
+      alert(`Customer registration is handled securely via WSO2. Click OK to navigate to Login.`);
+      onNavigateToLogin();
     }
   };
 
-  const handleOrganizerSubmit = (e: React.FormEvent) => {
+  const handleOrganizerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
 
+    if (!fullName) newErrors.fullName = 'Contact name is required';
+    if (!password || password.length < 8) newErrors.password = 'Password must be at least 8 characters';
+    if (password !== confirmPassword) newErrors.confirmPassword = 'Passwords do not match';
     if (!orgName) newErrors.orgName = 'Organization name is required';
     if (!businessEmail) newErrors.businessEmail = 'Business email is required';
     if (!phone) newErrors.phone = 'Phone number is required';
@@ -69,7 +82,39 @@ export const Register: React.FC<RegisterProps> = ({
     setOrganizerErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
-      setIsSubmitted(true);
+      setIsSubmitting(true);
+      setApiError(null);
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/identity/accounts/register-organizer`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            fullName,
+            email: businessEmail,
+            password,
+            organizationName: orgName,
+            businessEmail,
+            phone,
+            eventType,
+            about
+          }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setIsSubmitted(true);
+        } else {
+          setApiError(data.message || 'Registration failed. Please check your credentials.');
+        }
+      } catch (err) {
+        setApiError('Unable to connect to the authentication service. Please check if the backend is running.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -97,14 +142,18 @@ export const Register: React.FC<RegisterProps> = ({
         </h2>
         
         {/* Subtitle */}
-        <p className="font-body text-[14px] text-ink-gray-70 mb-6 leading-relaxed text-center max-w-[400px]">
+        <p className="font-body text-[14px] text-ink-gray-70 mb-4 leading-relaxed text-center max-w-[400px]">
           {role === 'customer' 
             ? 'Sign up to start booking tickets for your favorite events.'
             : 'Tell us a bit about your organization. Our team typically reviews requests within 1–2 business days.'
           }
         </p>
 
-
+        {apiError && (
+          <div className="w-full bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 text-sm text-center">
+            {apiError}
+          </div>
+        )}
 
         {/* Conditional Forms */}
         {role === 'customer' ? (
@@ -161,16 +210,17 @@ export const Register: React.FC<RegisterProps> = ({
           </form>
         ) : (
           <form className="w-full flex flex-col gap-4" onSubmit={handleOrganizerSubmit}>
-            <Input
-              label="Organization Name"
-              type="text"
-              placeholder="e.g. Live Nation Presents"
-              value={orgName}
-              onChange={(e) => setOrgName(e.target.value)}
-              error={organizerErrors.orgName}
-            />
-
+            
             <div className="flex gap-4 w-full flex-col sm:flex-row">
+              <Input
+                label="Contact Name"
+                type="text"
+                placeholder="Alex Johnson"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                error={organizerErrors.fullName}
+                className="flex-1"
+              />
               <Input
                 label="Business Email"
                 type="email"
@@ -178,6 +228,39 @@ export const Register: React.FC<RegisterProps> = ({
                 value={businessEmail}
                 onChange={(e) => setBusinessEmail(e.target.value)}
                 error={organizerErrors.businessEmail}
+                className="flex-1"
+              />
+            </div>
+
+            <div className="flex gap-4 w-full flex-col sm:flex-row">
+              <Input
+                label="Password"
+                type="password"
+                placeholder="Min. 8 characters"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                error={organizerErrors.password}
+                className="flex-1"
+              />
+              <Input
+                label="Confirm Password"
+                type="password"
+                placeholder="Re-enter password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                error={organizerErrors.confirmPassword}
+                className="flex-1"
+              />
+            </div>
+
+            <div className="flex gap-4 w-full flex-col sm:flex-row">
+              <Input
+                label="Organization Name"
+                type="text"
+                placeholder="e.g. Live Nation Presents"
+                value={orgName}
+                onChange={(e) => setOrgName(e.target.value)}
+                error={organizerErrors.orgName}
                 className="flex-1"
               />
               <Input
@@ -209,8 +292,8 @@ export const Register: React.FC<RegisterProps> = ({
               error={organizerErrors.about}
             />
 
-            <Button type="submit" variant="primary" className="mt-2 w-full">
-              Submit Request
+            <Button type="submit" variant="primary" className="mt-2 w-full" disabled={isSubmitting}>
+              {isSubmitting ? 'Submitting Request...' : 'Submit Request'}
             </Button>
           </form>
         )}
@@ -218,8 +301,8 @@ export const Register: React.FC<RegisterProps> = ({
         <p className="font-body text-sm font-medium text-ink-gray-70 mt-5">
           Already have an account?{' '}
           <span
-            className="text-ink-black font-semibold underline cursor-pointer hover:text-brand-blue transition-colors duration-150"
-            onClick={onNavigateToLogin}
+              className="text-ink-black font-semibold underline cursor-pointer hover:text-brand-blue transition-colors duration-150"
+              onClick={onNavigateToLogin}
           >
             Log In
           </span>

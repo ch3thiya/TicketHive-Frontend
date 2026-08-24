@@ -1,0 +1,127 @@
+import React, { createContext, useContext, type ReactNode } from 'react';
+import { useAuth as useOidcAuth, AuthProvider as OidcAuthProvider } from 'react-oidc-context';
+import { WebStorageStateStore } from 'oidc-client-ts';
+
+// Config for WSO2 Identity Server (Local Dev default)
+const oidcConfig = {
+  authority: 'https://api.asgardeo.io/t/orgvx6qo/oauth2/token',
+  client_id: import.meta.env.VITE_ASGARDEO_CLIENT_ID || 'YOUR_ASGARDEO_SPA_CLIENT_ID',
+  redirect_uri: window.location.origin,
+  response_type: 'code',
+  scope: 'openid profile email',
+  userStore: new WebStorageStateStore({ store: window.localStorage }),
+  automaticSilentRenew: true,
+  
+  metadata: {
+    issuer: 'https://api.asgardeo.io/t/orgvx6qo/oauth2/token',
+    authorization_endpoint: 'https://api.asgardeo.io/t/orgvx6qo/oauth2/authorize',
+    token_endpoint: 'https://api.asgardeo.io/t/orgvx6qo/oauth2/token',
+    userinfo_endpoint: 'https://api.asgardeo.io/t/orgvx6qo/oauth2/userinfo',
+    jwks_uri: 'https://api.asgardeo.io/t/orgvx6qo/oauth2/jwks',
+    end_session_endpoint: 'https://api.asgardeo.io/t/orgvx6qo/oidc/logout'
+  }
+};
+
+interface AuthContextType {
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  accessToken: string | null;
+  email: string | null;
+  fullName: string | null;
+  role: 'customer' | 'organizer' | 'admin' | null;
+  approvalStatus: 'pending' | 'approved' | 'rejected' | null;
+  login: () => Promise<void>;
+  logout: () => Promise<void>;
+  apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const oidc = useOidcAuth();
+
+  const accessToken = oidc.user?.access_token || null;
+  const profile = (oidc.user?.profile as any) || {};
+
+  // Extract Email
+  const email = (profile.email as string) || (profile.sub as string) || null;
+  
+  // Extract Name
+  const fullName = (profile.name as string) || (profile.given_name as string) || null;
+
+  // Extract custom WSO2 claim 'isapproved' (fallback to standard profile paths)
+  let approvalStatus: 'pending' | 'approved' | 'rejected' | null = null;
+  const isApprovedClaim = profile['isapproved'] || profile['urn:scim:schemas:extension:tickethive:2.0:User:isapproved'];
+  if (isApprovedClaim) {
+    approvalStatus = isApprovedClaim.toString().toLowerCase() as any;
+  }
+
+  // Extract Roles
+  let role: 'customer' | 'organizer' | 'admin' | null = null;
+  const rolesClaim = profile['roles'] || profile['groups'] || [];
+  const roles = Array.isArray(rolesClaim) ? rolesClaim : [rolesClaim];
+
+  if (roles.includes('Admin') || roles.includes('admin')) {
+    role = 'admin';
+  } else if (roles.includes('Organizer') || roles.includes('organizer')) {
+    role = 'organizer';
+  } else if (oidc.isAuthenticated) {
+    role = 'customer'; // Default role for authenticated users
+  }
+
+  const login = async () => {
+    await oidc.signinRedirect();
+  };
+
+  const logout = async () => {
+    await oidc.signoutRedirect();
+  };
+
+  // Helper method to make authenticated requests to API services
+  const apiFetch = async (url: string, options: RequestInit = {}) => {
+    const headers = new Headers(options.headers || {});
+    if (accessToken) {
+      headers.set('Authorization', `Bearer ${accessToken}`);
+    }
+    
+    return fetch(url, {
+      ...options,
+      headers
+    });
+  };
+
+  const value: AuthContextType = {
+    isAuthenticated: oidc.isAuthenticated,
+    isLoading: oidc.isLoading,
+    accessToken,
+    email,
+    fullName,
+    role,
+    approvalStatus,
+    login,
+    logout,
+    apiFetch
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+export const AuthConfigProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  return (
+    <OidcAuthProvider {...oidcConfig}>
+      <AuthProvider>{children}</AuthProvider>
+    </OidcAuthProvider>
+  );
+};

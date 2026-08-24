@@ -3,15 +3,19 @@ import { Home } from './common/Home';
 import { Login } from './auth/Login';
 import { Register } from './auth/Register';
 import { AdminLogin } from './auth/AdminLogin';
+import { AdminDashboard } from './auth/AdminDashboard';
 import { Navbar } from './navigation/Navbar';
 import { Footer } from './navigation/Footer';
 import { SignUpPopUp } from './popUps/SignUpPopUp';
 import { ArrowLeft } from 'lucide-react';
 import './App.css';
 
+import { useAuth } from './auth/AuthContext';
+
 function App() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
+  const { isAuthenticated, role } = useAuth();
 
   useEffect(() => {
     const handlePopState = () => {
@@ -20,6 +24,17 @@ function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  // Redirect users on successful login based on their role
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (role === 'admin' && (currentPath === '/admin-login' || currentPath === '/login')) {
+        navigateTo('/admin-dashboard');
+      } else if (currentPath === '/login' || currentPath === '/admin-login') {
+        navigateTo('/'); // Redirect customers to home page
+      }
+    }
+  }, [isAuthenticated, role, currentPath]);
 
   const navigateTo = (path: string) => {
     window.history.pushState({}, '', path);
@@ -36,7 +51,8 @@ function App() {
   const isAuthRoute =
     currentPath === '/login' ||
     currentPath.startsWith('/register') ||
-    currentPath === '/admin-login';
+    currentPath === '/admin-login' ||
+    currentPath === '/admin-dashboard';
 
   const renderContent = () => {
     if (currentPath === '/login') {
@@ -60,6 +76,10 @@ function App() {
 
     if (currentPath === '/admin-login') {
       return <AdminLogin />;
+    }
+
+    if (currentPath === '/admin-dashboard') {
+      return <AdminDashboard />;
     }
 
     // Default route represents Home landing page
