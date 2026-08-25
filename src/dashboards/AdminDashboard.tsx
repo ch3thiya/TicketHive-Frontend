@@ -50,9 +50,9 @@ export const AdminDashboard: React.FC = () => {
   const [venues, setVenues] = useState(INITIAL_VENUES);
 
   const fetchPendingRequests = useCallback(async () => {
-    setError(null);
     try {
       const response = await apiFetch(`${API_BASE_URL}/api/identity/organizer-requests/pending`);
+      setError(null);
       if (response.ok) {
         const data = await response.json();
         setRequests(data);
@@ -83,8 +83,10 @@ export const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     if (isAuthenticated && role === 'admin') {
-      fetchPendingRequests();
-      fetchApprovedOrganizers();
+      Promise.resolve().then(() => {
+        fetchPendingRequests();
+        fetchApprovedOrganizers();
+      });
     }
   }, [isAuthenticated, role, fetchPendingRequests, fetchApprovedOrganizers]);
 
