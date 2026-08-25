@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { ArrowLeft, MapPin, Plus } from 'lucide-react';
 
@@ -39,7 +39,7 @@ export const AdminDashboard: React.FC = () => {
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   
   // Approved organizers list states
-  const [organizers, setOrganizers] = useState<any[]>([]);
+  const [organizers, setOrganizers] = useState<Array<{ organizationName?: string; businessEmail?: string; eventType?: string; fullName?: string; email?: string }>>([]);
   const [orgsLoading, setOrgsLoading] = useState(true);
 
   // Custom neo-brutalist delete modal states
@@ -49,7 +49,7 @@ export const AdminDashboard: React.FC = () => {
 
   const [venues, setVenues] = useState(INITIAL_VENUES);
 
-  const fetchPendingRequests = async () => {
+  const fetchPendingRequests = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -61,14 +61,14 @@ export const AdminDashboard: React.FC = () => {
         const errData = await response.json().catch(() => ({}));
         setError(errData.message || 'Failed to fetch pending requests.');
       }
-    } catch (err) {
+    } catch {
       setError('Unable to reach the server. Please verify the backend is running.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [apiFetch]);
 
-  const fetchApprovedOrganizers = async () => {
+  const fetchApprovedOrganizers = useCallback(async () => {
     setOrgsLoading(true);
     try {
       const response = await apiFetch(`${API_BASE_URL}/api/identity/organizer-requests/organizers`);
@@ -81,14 +81,14 @@ export const AdminDashboard: React.FC = () => {
     } finally {
       setOrgsLoading(false);
     }
-  };
+  }, [apiFetch]);
 
   useEffect(() => {
     if (isAuthenticated && role === 'admin') {
       fetchPendingRequests();
       fetchApprovedOrganizers();
     }
-  }, [isAuthenticated, role]);
+  }, [isAuthenticated, role, fetchPendingRequests, fetchApprovedOrganizers]);
 
   const handleApprove = async (requestId: string) => {
     setActioningId(requestId);
@@ -105,7 +105,7 @@ export const AdminDashboard: React.FC = () => {
         const data = await response.json().catch(() => ({}));
         alert(data.message || 'Failed to approve request.');
       }
-    } catch (err) {
+    } catch {
       alert('An error occurred. Please try again.');
     } finally {
       setActioningId(null);
@@ -128,7 +128,7 @@ export const AdminDashboard: React.FC = () => {
         const data = await response.json().catch(() => ({}));
         alert(data.message || 'Failed to reject request.');
       }
-    } catch (err) {
+    } catch {
       alert('An error occurred. Please try again.');
     } finally {
       setActioningId(null);

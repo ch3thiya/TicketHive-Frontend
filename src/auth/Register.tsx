@@ -25,10 +25,12 @@ export const Register: React.FC<RegisterProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    setRole(initialRole);
+    if (role !== initialRole) {
+      setRole(initialRole);
+    }
     setIsSubmitted(false); // Reset submitted state on tab change/redirect
     setApiError(null);
-  }, [initialRole]);
+  }, [initialRole, role]);
 
   // Common Credential States
   const [fullName, setFullName] = useState('');
@@ -84,7 +86,7 @@ export const Register: React.FC<RegisterProps> = ({
         } else {
           setApiError(data.message || 'Customer registration failed.');
         }
-      } catch (err) {
+      } catch {
         setApiError('Unable to connect to the authentication service. Please check if the backend is running.');
       } finally {
         setIsSubmitting(false);
@@ -136,7 +138,7 @@ export const Register: React.FC<RegisterProps> = ({
         } else {
           setApiError(data.message || 'Registration failed. Please check your credentials.');
         }
-      } catch (err) {
+      } catch {
         setApiError('Unable to connect to the authentication service. Please check if the backend is running.');
       } finally {
         setIsSubmitting(false);

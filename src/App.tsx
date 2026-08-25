@@ -18,6 +18,12 @@ function App() {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const { isAuthenticated, role, login, isLoading } = useAuth();
 
+  const navigateTo = (path: string) => {
+    window.history.pushState({}, '', path);
+    setCurrentPath(path);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
   useEffect(() => {
     const handlePopState = () => {
       setCurrentPath(window.location.pathname);
@@ -48,12 +54,6 @@ function App() {
       }
     }
   }, [isAuthenticated, role, currentPath]);
-
-  const navigateTo = (path: string) => {
-    window.history.pushState({}, '', path);
-    setCurrentPath(path);
-    window.scrollTo({ top: 0, behavior: 'instant' });
-  };
 
   const getRegisterInitialRole = (): 'customer' | 'organizer' => {
     const params = new URLSearchParams(window.location.search);

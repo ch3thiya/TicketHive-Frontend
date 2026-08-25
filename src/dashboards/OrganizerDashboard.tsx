@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { ArrowLeft, Calendar, MapPin, Plus, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Plus, Upload } from 'lucide-react';
 import { Input } from '../components/Input';
-import { Button } from '../components/Button';
 
 // Mock ticket category type
 interface TicketCategory {
