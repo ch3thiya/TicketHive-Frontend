@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
@@ -24,13 +24,14 @@ export const Register: React.FC<RegisterProps> = ({
   const [apiError, setApiError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (role !== initialRole) {
-      setRole(initialRole);
-    }
-    setIsSubmitted(false); // Reset submitted state on tab change/redirect
+  // Sync prop changes during render to avoid useEffect state triggers
+  const [prevInitialRole, setPrevInitialRole] = useState(initialRole);
+  if (initialRole !== prevInitialRole) {
+    setPrevInitialRole(initialRole);
+    setRole(initialRole);
+    setIsSubmitted(false);
     setApiError(null);
-  }, [initialRole, role]);
+  }
 
   // Common Credential States
   const [fullName, setFullName] = useState('');

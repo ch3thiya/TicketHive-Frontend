@@ -50,7 +50,6 @@ export const AdminDashboard: React.FC = () => {
   const [venues, setVenues] = useState(INITIAL_VENUES);
 
   const fetchPendingRequests = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
       const response = await apiFetch(`${API_BASE_URL}/api/identity/organizer-requests/pending`);
@@ -69,7 +68,6 @@ export const AdminDashboard: React.FC = () => {
   }, [apiFetch]);
 
   const fetchApprovedOrganizers = useCallback(async () => {
-    setOrgsLoading(true);
     try {
       const response = await apiFetch(`${API_BASE_URL}/api/identity/organizer-requests/organizers`);
       if (response.ok) {
