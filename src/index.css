@@ -1,111 +1,160 @@
-:root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+@import "tailwindcss";
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+@theme {
+  /* Colors mapping */
+  --color-brand-blue: #0000FF;
+  --color-brand-blue-light: #E5E5FF;
+  --color-brand-white: #FFFFFF;
+  --color-ink-black: #0A0A0F;
+  --color-ink-gray-70: #4A4A57;
+  --color-ink-gray-30: #D8D8E4;
+  --color-surface-yellow: #FFE94D;
+  --color-surface-pink: #FF6FD8;
+  --color-state-success: #00C875;
+  --color-state-error: #FF3B3B;
+  --color-state-warning: #FFB800;
+  --color-admin-bg: #0A0A0E;
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  /* Font mapping */
+  --font-heading: 'Baloo 2', 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'DM Sans', 'Segoe UI', Roboto, sans-serif;
 
-  @media (max-width: 1024px) {
-    font-size: 16px;
+  /* Corner Radius mapping */
+  --radius-8: 8px;
+  --radius-14: 14px;
+  --radius-16: 16px;
+  --radius-20: 20px;
+  --radius-24: 24px;
+  --radius-28: 28px;
+  --radius-32: 32px;
+  --radius-full: 999px;
+
+  /* Elevation/Shadow mapping */
+  --shadow-soft-3d: 0px 14px 30px -4px rgba(0, 0, 255, 0.18), 0px 2px 6px 0px rgba(0, 0, 0, 0.06);
+  --shadow-brutal-m: 6px 6px 0px 0px #0A0A0F;
+  --shadow-brutal-s: 4px 4px 0px 0px #0A0A0F;
+}
+
+/* Custom Base layer resets for DM Sans as body default */
+@layer base {
+  body {
+    font-family: var(--font-body);
+    background-color: var(--color-brand-white);
+    color: var(--color-ink-black);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
+/* Custom Background Patterns */
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
+/* Blue decorative background with floating circles */
+.bg-blue-pattern {
+  background-color: var(--color-brand-blue);
+  position: relative;
+  overflow: hidden;
+  min-height: 100vh;
+  width: 100%;
   display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
 }
 
-body {
-  margin: 0;
+.bg-blue-pattern::before,
+.bg-blue-pattern::after,
+.bg-blue-pattern .blob-1,
+.bg-blue-pattern .blob-2 {
+  content: '';
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12); /* semi-transparent circles */
+  pointer-events: none;
+  z-index: 0;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+.bg-blue-pattern::before {
+  width: 300px;
+  height: 300px;
+  top: -50px;
+  right: -50px;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
-  margin: 0;
+.bg-blue-pattern::after {
+  width: 500px;
+  height: 500px;
+  bottom: -150px;
+  left: -100px;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+.bg-blue-pattern .blob-1 {
+  width: 200px;
+  height: 200px;
+  top: 40%;
+  left: -80px;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+.bg-blue-pattern .blob-2 {
+  width: 250px;
+  height: 250px;
+  top: 20%;
+  right: 10%;
 }
+
+/* Faint blue dot grid on near-black for Admin Portal */
+.bg-admin-pattern {
+  background-color: var(--color-admin-bg);
+  background-image: 
+    radial-gradient(rgba(0, 0, 255, 0.25) 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+}
+
+.max-w-7xl {
+  max-width: 80rem; /* 1280px */
+  width: 100%;
+}
+
+.max-w-8xl {
+  max-width: 90rem; /* 1440px */
+  width: 100%;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Custom Neo-Brutalist Global Scrollbar */
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F9F9FC;
+  border-left: 3px solid #0A0A0F;
+  border-top: 3px solid #0A0A0F;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #0000FF;
+  border: 3px solid #0A0A0F;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #FFE94D;
+}
+
