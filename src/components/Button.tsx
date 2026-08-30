@@ -29,7 +29,7 @@ export const Button: React.FC<ButtonProps> = ({
     : 'py-[12px] px-[22px]';
 
   // Shadows and active/hover interactions matching neo-brutalist spec
-  let shadowClasses = '';
+  let shadowClasses: string;
   if (shadow === 'M') {
     shadowClasses = 'shadow-brutal-m hover:shadow-[8px_8px_0px_0px_#0A0A0F] active:shadow-[2px_2px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-[4px] active:translate-y-[4px]';
   } else if (shadow === 'S') {

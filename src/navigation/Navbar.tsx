@@ -13,7 +13,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLoginClick,
   onLogoClick,
 }) => {
-  const { isAuthenticated, logout, role, fullName } = useAuth();
+  const { isAuthenticated, logout, role } = useAuth();
 
   return (
     <nav className="w-full bg-brand-white border-b-3 border-ink-black sticky top-0 z-50">
