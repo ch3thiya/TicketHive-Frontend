@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
@@ -24,11 +24,14 @@ export const Register: React.FC<RegisterProps> = ({
   const [apiError, setApiError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
+  // Sync prop changes during render to avoid useEffect state triggers
+  const [prevInitialRole, setPrevInitialRole] = useState(initialRole);
+  if (initialRole !== prevInitialRole) {
+    setPrevInitialRole(initialRole);
     setRole(initialRole);
-    setIsSubmitted(false); // Reset submitted state on tab change/redirect
+    setIsSubmitted(false);
     setApiError(null);
-  }, [initialRole]);
+  }
 
   // Common Credential States
   const [fullName, setFullName] = useState('');
@@ -84,7 +87,7 @@ export const Register: React.FC<RegisterProps> = ({
         } else {
           setApiError(data.message || 'Customer registration failed.');
         }
-      } catch (err) {
+      } catch {
         setApiError('Unable to connect to the authentication service. Please check if the backend is running.');
       } finally {
         setIsSubmitting(false);
@@ -136,7 +139,7 @@ export const Register: React.FC<RegisterProps> = ({
         } else {
           setApiError(data.message || 'Registration failed. Please check your credentials.');
         }
-      } catch (err) {
+      } catch {
         setApiError('Unable to connect to the authentication service. Please check if the backend is running.');
       } finally {
         setIsSubmitting(false);
