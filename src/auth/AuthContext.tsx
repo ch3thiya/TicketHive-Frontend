@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { useAuth as useOidcAuth, AuthProvider as OidcAuthProvider } from 'react-oidc-context';
 import { WebStorageStateStore } from 'oidc-client-ts';
@@ -38,14 +39,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const oidc = useOidcAuth();
-  const [dbUser, setDbUser] = useState<any>(null);
+  const [dbUser, setDbUser] = useState<{ role?: string; approvalStatus?: string } | null>(null);
 
   const accessToken = oidc.user?.access_token || null;
-  const profile = (oidc.user?.profile as any) || {};
+  const profile = (oidc.user?.profile as Record<string, unknown>) || {};
 
   // Log token claims to help debug in browser developer console
   if (oidc.isAuthenticated) {
@@ -62,7 +63,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   let tokenApprovalStatus: 'pending' | 'approved' | 'rejected' | null = null;
   const isApprovedClaim = profile['isapproved'] || profile['urn:scim:schemas:extension:tickethive:2.0:User:isapproved'];
   if (isApprovedClaim) {
-    tokenApprovalStatus = isApprovedClaim.toString().toLowerCase() as any;
+    tokenApprovalStatus = (isApprovedClaim.toString().toLowerCase() as 'pending' | 'approved' | 'rejected') || null;
   }
 
   // Extract Roles from token
@@ -79,8 +80,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }
 
   // Use database values as source of truth, falling back to OIDC token values
-  const role = dbUser ? (dbUser.role?.toLowerCase() as any) : tokenRole;
-  const approvalStatus = dbUser ? (dbUser.approvalStatus?.toLowerCase() as any) : tokenApprovalStatus;
+  const role = dbUser ? (dbUser.role?.toLowerCase() as 'customer' | 'organizer' | 'admin' | null) : tokenRole;
+  const approvalStatus = dbUser ? (dbUser.approvalStatus?.toLowerCase() as 'pending' | 'approved' | 'rejected' | null) : tokenApprovalStatus;
 
   const login = async () => {
     await oidc.signinRedirect();
@@ -91,7 +92,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // Helper method to make authenticated requests to API services
-  const apiFetch = async (url: string, options: RequestInit = {}) => {
+  const apiFetch = useCallback(async (url: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers || {});
     if (accessToken) {
       headers.set('Authorization', `Bearer ${accessToken}`);
@@ -101,7 +102,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ...options,
       headers
     });
-  };
+  }, [accessToken]);
 
   // Synchronize account with local PostgreSQL database upon successful login
   useEffect(() => {
@@ -125,7 +126,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
     syncAccount();
-  }, [oidc.isAuthenticated, accessToken]);
+  }, [oidc.isAuthenticated, accessToken, apiFetch]);
 
   const value: AuthContextType = {
     isAuthenticated: oidc.isAuthenticated,

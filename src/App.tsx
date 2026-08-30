@@ -18,6 +18,12 @@ function App() {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const { isAuthenticated, role, login, isLoading } = useAuth();
 
+  const navigateTo = (path: string) => {
+    window.history.pushState({}, '', path);
+    setCurrentPath(path);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
   useEffect(() => {
     const handlePopState = () => {
       setCurrentPath(window.location.pathname);
@@ -28,32 +34,32 @@ function App() {
 
   // Redirect users on successful login based on their role
   useEffect(() => {
-    if (isAuthenticated) {
-      const isCallback = window.location.search.includes('code=') && window.location.search.includes('state=');
-      if (role === 'admin') {
-        // Redirect to dashboard ONLY on login pages or during callback
-        if (currentPath === '/admin-login' || currentPath === '/login' || (currentPath === '/' && isCallback)) {
-          navigateTo('/admin-dashboard');
-        }
-      } else if (role === 'organizer') {
-        // Redirect organizers to their dashboard on login pages or during callback
-        if (currentPath === '/login' || (currentPath === '/' && isCallback)) {
-          navigateTo('/organizer-dashboard');
-        }
-      } else {
-        // Send regular customers back to homepage if they are on login screens
-        if (currentPath === '/login' || currentPath === '/admin-login') {
-          navigateTo('/');
-        }
+    if (!isAuthenticated) return;
+
+    const isCallback = window.location.search.includes('code=') && window.location.search.includes('state=');
+
+    const redirect = (path: string) => {
+      window.history.pushState({}, '', path);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    };
+
+    if (role === 'admin') {
+      // Redirect to dashboard ONLY on login pages or during callback
+      if (currentPath === '/admin-login' || currentPath === '/login' || (currentPath === '/' && isCallback)) {
+        redirect('/admin-dashboard');
+      }
+    } else if (role === 'organizer') {
+      // Redirect organizers to their dashboard on login pages or during callback
+      if (currentPath === '/login' || (currentPath === '/' && isCallback)) {
+        redirect('/organizer-dashboard');
+      }
+    } else {
+      // Send regular customers back to homepage if they are on login screens
+      if (currentPath === '/login' || currentPath === '/admin-login') {
+        redirect('/');
       }
     }
   }, [isAuthenticated, role, currentPath]);
-
-  const navigateTo = (path: string) => {
-    window.history.pushState({}, '', path);
-    setCurrentPath(path);
-    window.scrollTo({ top: 0, behavior: 'instant' });
-  };
 
   const getRegisterInitialRole = (): 'customer' | 'organizer' => {
     const params = new URLSearchParams(window.location.search);
