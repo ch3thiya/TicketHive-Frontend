@@ -22,6 +22,7 @@ import { CreateEventPopUp } from '../popUps/CreateEventPopUp';
 import { EditEventPopUp } from '../popUps/EditEventPopUp';
 import { AddShowPopUp } from '../popUps/AddShowPopUp';
 import { EditShowPopUp } from '../popUps/EditShowPopUp';
+import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || 'http://localhost:5142';
@@ -81,6 +82,21 @@ export const OrganizerDashboard: React.FC = () => {
   const [isEditEventOpen, setIsEditEventOpen] = useState(false);
   const [isAddShowOpen, setIsAddShowOpen] = useState(false);
   const [isEditShowOpen, setIsEditShowOpen] = useState(false);
+
+  // Confirm Delete / Cancel Modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: React.ReactNode;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    description: '',
+    confirmText: 'Delete',
+    onConfirm: () => {}
+  });
 
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
   const [selectedShow, setSelectedShow] = useState<ShowDetails | null>(null);
@@ -334,49 +350,46 @@ export const OrganizerDashboard: React.FC = () => {
   };
 
   // Cancel Event Handler
-  const handleCancelEvent = async (
-    eventId: string,
-    eName: string
-  ) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to cancel the event "${eName}"? This action cannot be undone.`
-      )
-    ) {
-      return;
-    }
+  const handleCancelEvent = (eventId: string, eName: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Cancel Event?',
+      description: (
+        <>
+          Are you sure you want to cancel the event <strong className="text-ink-black">"{eName}"</strong>? This will set its status to Cancelled.
+        </>
+      ),
+      confirmText: 'Cancel Event',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setIsLoading(true);
 
-    try {
-      setIsLoading(true);
+          const res = await apiFetch(
+            `${CATALOG_API_URL}/api/catalog/events/${eventId}/cancel`,
+            {
+              method: 'POST'
+            }
+          );
 
-      const res = await apiFetch(
-        `${CATALOG_API_URL}/api/catalog/events/${eventId}/cancel`,
-        {
-          method: 'POST'
+          if (res.ok) {
+            showNotification('Event has been cancelled.');
+            fetchEvents();
+          } else {
+            const errorData = await res.json().catch(() => null);
+            showNotification(
+              errorData?.message || 'Failed to cancel event.',
+              true
+            );
+          }
+        } catch (err) {
+          console.error(err);
+          showNotification('Error cancelling event.', true);
+        } finally {
+          setIsLoading(false);
         }
-      );
-
-      if (res.ok) {
-        showNotification('Event has been cancelled.');
-        fetchEvents();
-      } else {
-        const errorData = await res.json().catch(() => null);
-
-        showNotification(
-          errorData?.message || 'Failed to cancel event.',
-          true
-        );
       }
-    } catch (err) {
-      console.error(err);
-
-      showNotification(
-        'An unexpected error occurred.',
-        true
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    });
   };
 
   // Publish Event Handler
@@ -648,46 +661,42 @@ export const OrganizerDashboard: React.FC = () => {
   };
 
   // Cancel Show Handler
-  const handleCancelShow = async (showId: string) => {
-    if (
-      !window.confirm(
-        'Are you sure you want to cancel this show? This action cannot be undone.'
-      )
-    ) {
-      return;
-    }
+  const handleCancelShow = (showId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Cancel Show?',
+      description: 'Are you sure you want to cancel this performance show? This will set its status to Cancelled.',
+      confirmText: 'Cancel Show',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setIsLoading(true);
 
-    try {
-      setIsLoading(true);
+          const res = await apiFetch(
+            `${CATALOG_API_URL}/api/catalog/shows/${showId}/cancel`,
+            {
+              method: 'POST'
+            }
+          );
 
-      const res = await apiFetch(
-        `${CATALOG_API_URL}/api/catalog/shows/${showId}/cancel`,
-        {
-          method: 'POST'
+          if (res.ok) {
+            showNotification('Show has been cancelled.');
+            fetchEvents();
+          } else {
+            const errorData = await res.json().catch(() => null);
+            showNotification(
+              errorData?.message || 'Failed to cancel show.',
+              true
+            );
+          }
+        } catch (err) {
+          console.error(err);
+          showNotification('Error cancelling show.', true);
+        } finally {
+          setIsLoading(false);
         }
-      );
-
-      if (res.ok) {
-        showNotification('Show has been cancelled.');
-        fetchEvents();
-      } else {
-        const errorData = await res.json().catch(() => null);
-
-        showNotification(
-          errorData?.message || 'Failed to cancel show.',
-          true
-        );
       }
-    } catch (err) {
-      console.error(err);
-
-      showNotification(
-        'An unexpected error occurred.',
-        true
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    });
   };
 
   // Helpers to open Edit Modals
@@ -1406,6 +1415,17 @@ export const OrganizerDashboard: React.FC = () => {
         handleAddCategoryRow={handleAddCategoryRow}
         handleCategoryChange={handleCategoryChange}
         handleRemoveCategoryRow={handleRemoveCategoryRow}
+        isLoading={isLoading}
+      />
+
+      {/* 7. Confirm Delete / Cancel Modal */}
+      <ConfirmDeletePopUp
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        description={confirmModal.description}
+        confirmText={confirmModal.confirmText}
         isLoading={isLoading}
       />
 
