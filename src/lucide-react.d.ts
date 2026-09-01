@@ -1,18 +1,40 @@
 declare module 'lucide-react' {
   import { FC, SVGProps } from 'react';
   
-  type IconProps = SVGProps<SVGSVGElement> & {
+  export type IconProps = SVGProps<SVGSVGElement> & {
     size?: number | string;
     strokeWidth?: number | string;
     absoluteStrokeWidth?: boolean;
   };
   
-  export const ArrowLeft: FC<IconProps>;
-  export const Eye: FC<IconProps>;
-  export const EyeOff: FC<IconProps>;
-  export const MapPin: FC<IconProps>;
-  export const Plus: FC<IconProps>;
-  export const Calendar: FC<IconProps>;
-  export const Upload: FC<IconProps>;
+  export type Icon = FC<IconProps>;
+
+  export const ArrowLeft: Icon;
+  export const Eye: Icon;
+  export const EyeOff: Icon;
+  export const MapPin: Icon;
+  export const Plus: Icon;
+  export const Calendar: Icon;
+  export const Upload: Icon;
+  export const Clock: Icon;
+  export const Tag: Icon;
+  export const AlertCircle: Icon;
+  export const CheckCircle: Icon;
+  export const Edit3: Icon;
+  export const Ban: Icon;
+  export const Layers: Icon;
+  export const Send: Icon;
+  export const Sliders: Icon;
+  export const Bell: Icon;
+  export const Users: Icon;
+  export const ShieldAlert: Icon;
+  export const Info: Icon;
+  export const Filter: Icon;
+  export const X: Icon;
+  export const RefreshCw: Icon;
+  export const Sparkles: Icon;
+  export const Search: Icon;
+
+  export const icons: Record<string, Icon>;
 }
 
