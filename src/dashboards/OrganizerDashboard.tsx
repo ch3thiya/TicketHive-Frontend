@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import {
   ArrowLeft,
@@ -18,6 +18,11 @@ import {
   Users
 } from 'lucide-react';
 import { Input } from '../components/Input';
+import { CreateEventPopUp } from '../popUps/CreateEventPopUp';
+import { EditEventPopUp } from '../popUps/EditEventPopUp';
+import { AddShowPopUp } from '../popUps/AddShowPopUp';
+import { EditShowPopUp } from '../popUps/EditShowPopUp';
+import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || 'http://localhost:5142';
@@ -77,6 +82,21 @@ export const OrganizerDashboard: React.FC = () => {
   const [isEditEventOpen, setIsEditEventOpen] = useState(false);
   const [isAddShowOpen, setIsAddShowOpen] = useState(false);
   const [isEditShowOpen, setIsEditShowOpen] = useState(false);
+
+  // Confirm Delete / Cancel Modal state
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: React.ReactNode;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    description: '',
+    confirmText: 'Delete',
+    onConfirm: () => {}
+  });
 
   const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
   const [selectedShow, setSelectedShow] = useState<ShowDetails | null>(null);
@@ -330,49 +350,46 @@ export const OrganizerDashboard: React.FC = () => {
   };
 
   // Cancel Event Handler
-  const handleCancelEvent = async (
-    eventId: string,
-    eName: string
-  ) => {
-    if (
-      !window.confirm(
-        `Are you sure you want to cancel the event "${eName}"? This action cannot be undone.`
-      )
-    ) {
-      return;
-    }
+  const handleCancelEvent = (eventId: string, eName: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Cancel Event?',
+      description: (
+        <>
+          Are you sure you want to cancel the event <strong className="text-ink-black">"{eName}"</strong>? This will set its status to Cancelled.
+        </>
+      ),
+      confirmText: 'Cancel Event',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setIsLoading(true);
 
-    try {
-      setIsLoading(true);
+          const res = await apiFetch(
+            `${CATALOG_API_URL}/api/catalog/events/${eventId}/cancel`,
+            {
+              method: 'POST'
+            }
+          );
 
-      const res = await apiFetch(
-        `${CATALOG_API_URL}/api/catalog/events/${eventId}/cancel`,
-        {
-          method: 'POST'
+          if (res.ok) {
+            showNotification('Event has been cancelled.');
+            fetchEvents();
+          } else {
+            const errorData = await res.json().catch(() => null);
+            showNotification(
+              errorData?.message || 'Failed to cancel event.',
+              true
+            );
+          }
+        } catch (err) {
+          console.error(err);
+          showNotification('Error cancelling event.', true);
+        } finally {
+          setIsLoading(false);
         }
-      );
-
-      if (res.ok) {
-        showNotification('Event has been cancelled.');
-        fetchEvents();
-      } else {
-        const errorData = await res.json().catch(() => null);
-
-        showNotification(
-          errorData?.message || 'Failed to cancel event.',
-          true
-        );
       }
-    } catch (err) {
-      console.error(err);
-
-      showNotification(
-        'An unexpected error occurred.',
-        true
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    });
   };
 
   // Publish Event Handler
@@ -598,7 +615,12 @@ export const OrganizerDashboard: React.FC = () => {
           : null,
         reminderMinutesBefore: showReminderMinutesBefore
           ? parseInt(showReminderMinutesBefore, 10)
-          : null
+          : null,
+        categories: showCategories.map(c => ({
+          name: c.name.trim(),
+          price: parseFloat(c.price) || 0,
+          capacity: parseInt(c.capacity, 10) || 0
+        }))
       };
 
       const res = await apiFetch(
@@ -639,46 +661,42 @@ export const OrganizerDashboard: React.FC = () => {
   };
 
   // Cancel Show Handler
-  const handleCancelShow = async (showId: string) => {
-    if (
-      !window.confirm(
-        'Are you sure you want to cancel this show? This action cannot be undone.'
-      )
-    ) {
-      return;
-    }
+  const handleCancelShow = (showId: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Cancel Show?',
+      description: 'Are you sure you want to cancel this performance show? This will set its status to Cancelled.',
+      confirmText: 'Cancel Show',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setIsLoading(true);
 
-    try {
-      setIsLoading(true);
+          const res = await apiFetch(
+            `${CATALOG_API_URL}/api/catalog/shows/${showId}/cancel`,
+            {
+              method: 'POST'
+            }
+          );
 
-      const res = await apiFetch(
-        `${CATALOG_API_URL}/api/catalog/shows/${showId}/cancel`,
-        {
-          method: 'POST'
+          if (res.ok) {
+            showNotification('Show has been cancelled.');
+            fetchEvents();
+          } else {
+            const errorData = await res.json().catch(() => null);
+            showNotification(
+              errorData?.message || 'Failed to cancel show.',
+              true
+            );
+          }
+        } catch (err) {
+          console.error(err);
+          showNotification('Error cancelling show.', true);
+        } finally {
+          setIsLoading(false);
         }
-      );
-
-      if (res.ok) {
-        showNotification('Show has been cancelled.');
-        fetchEvents();
-      } else {
-        const errorData = await res.json().catch(() => null);
-
-        showNotification(
-          errorData?.message || 'Failed to cancel show.',
-          true
-        );
       }
-    } catch (err) {
-      console.error(err);
-
-      showNotification(
-        'An unexpected error occurred.',
-        true
-      );
-    } finally {
-      setIsLoading(false);
-    }
+    });
   };
 
   // Helpers to open Edit Modals
@@ -797,7 +815,7 @@ export const OrganizerDashboard: React.FC = () => {
           </button>
 
           <div className="bg-brand-blue text-brand-white font-body font-bold text-[12px] uppercase tracking-[1.5px] px-6 py-1.5 rounded-full select-none border-2 border-ink-black shadow-[2px_2px_0px_0px_#0A0A0F]">
-            Organizer Console (SCRUM-15)
+            Organizer Console
           </div>
 
           <button
@@ -841,10 +859,6 @@ export const OrganizerDashboard: React.FC = () => {
             <h1 className="font-heading font-bold text-[32px] text-ink-black leading-none mb-2">
               Event Management
             </h1>
-
-            <p className="text-sm text-ink-gray-70">
-              Manage your event lifecycle: Draft → Add Shows & Ticket Categories → Publish.
-            </p>
           </div>
 
           <button
@@ -1317,630 +1331,103 @@ export const OrganizerDashboard: React.FC = () => {
       </main>
 
       {/* 3. Create Event Modal */}
-      {isCreateEventOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0A0A0F]/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-brand-white border-3 border-ink-black rounded-32 shadow-soft-3d w-full max-w-[640px] my-8 p-8 flex flex-col relative animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar">
-
-            <button
-              onClick={() =>
-                setIsCreateEventOpen(false)
-              }
-              className="absolute top-4 right-4 w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light transition-all"
-            >
-              <span className="font-bold text-sm text-ink-black">
-                ✕
-              </span>
-            </button>
-
-            <h2 className="font-heading font-bold text-[24px] text-ink-black mb-1">
-              Create New Event
-            </h2>
-
-            <p className="text-xs text-ink-gray-70 mb-5 border-b border-ink-gray-30 pb-3">
-              Creates a new <strong>Draft</strong> event. You
-              can add shows, venues, and ticket prices next.
-            </p>
-
-            <form
-              onSubmit={handleCreateEvent}
-              className="flex flex-col gap-4"
-            >
-              <Input
-                label="Event Name *"
-                type="text"
-                placeholder="e.g. Neon Summer Festival 2026"
-                value={eventName}
-                onChange={(e) =>
-                  setEventName(e.target.value)
-                }
-                required
-              />
-
-              <div className="flex gap-4 w-full flex-col sm:flex-row">
-                <div className="flex-1">
-                  <Input
-                    label="Category"
-                    type="text"
-                    placeholder="Concert, Sports, Festival, etc."
-                    value={eventCategory}
-                    onChange={(e) =>
-                      setEventCategory(e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="flex-1">
-                  <Input
-                    label="Cancellation Cutoff (Hours Before Show)"
-                    type="text"
-                    placeholder="24"
-                    value={cancellationCutoffHours}
-                    onChange={(e) =>
-                      setCancellationCutoffHours(
-                        e.target.value
-                      )
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-4 w-full flex-col sm:flex-row">
-                <Input
-                  label="Target Date (Optional)"
-                  type="text"
-                  placeholder="YYYY-MM-DD"
-                  value={eventDate}
-                  onChange={(e) =>
-                    setEventDate(e.target.value)
-                  }
-                  className="flex-1"
-                />
-
-                <Input
-                  label="Target Time (Optional)"
-                  type="text"
-                  placeholder="HH:mm"
-                  value={eventTime}
-                  onChange={(e) =>
-                    setEventTime(e.target.value)
-                  }
-                  className="flex-1"
-                />
-              </div>
-
-              <Input
-                label="Description"
-                type="textarea"
-                placeholder="Describe the event, line-up, special rules..."
-                value={eventDesc}
-                onChange={(e) =>
-                  setEventDesc(e.target.value)
-                }
-              />
-
-              {/* Banner Upload / URL */}
-              <div className="flex flex-col gap-2">
-
-                <label className="font-semibold text-[14px] text-ink-black">
-                  Event Banner URL or Upload
-                </label>
-
-                <Input
-                  label=""
-                  type="text"
-                  placeholder="https://example.com/banner.jpg"
-                  value={eventBannerUrl}
-                  onChange={(e) =>
-                    setEventBannerUrl(e.target.value)
-                  }
-                />
-
-                <label className="border-2 border-dashed border-ink-gray-30 bg-[#F9F9FC] rounded-16 p-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-brand-blue-light/35 transition-all text-xs font-bold text-ink-black">
-                  <Upload
-                    size={16}
-                    className="text-brand-blue"
-                  />
-
-                  <span>Upload from Computer</span>
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full font-body font-bold text-[15px] text-brand-white bg-brand-blue border-3 border-ink-black rounded-full py-3.5 hover:bg-[#1a1a5b] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 mt-3 disabled:opacity-50"
-              >
-                {isLoading
-                  ? 'Creating...'
-                  : 'Save Draft Event'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateEventPopUp
+        isOpen={isCreateEventOpen}
+        onClose={() => setIsCreateEventOpen(false)}
+        onSubmit={handleCreateEvent}
+        eventName={eventName}
+        setEventName={setEventName}
+        eventCategory={eventCategory}
+        setEventCategory={setEventCategory}
+        cancellationCutoffHours={cancellationCutoffHours}
+        setCancellationCutoffHours={setCancellationCutoffHours}
+        eventDate={eventDate}
+        setEventDate={setEventDate}
+        eventTime={eventTime}
+        setEventTime={setEventTime}
+        eventDesc={eventDesc}
+        setEventDesc={setEventDesc}
+        eventBannerUrl={eventBannerUrl}
+        setEventBannerUrl={setEventBannerUrl}
+        handleImageChange={handleImageChange}
+        isLoading={isLoading}
+      />
 
       {/* 4. Edit Event Modal */}
-      {isEditEventOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0A0A0F]/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-brand-white border-3 border-ink-black rounded-32 shadow-soft-3d w-full max-w-[640px] my-8 p-8 flex flex-col relative animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar">
-
-            <button
-              onClick={() =>
-                setIsEditEventOpen(false)
-              }
-              className="absolute top-4 right-4 w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light transition-all"
-            >
-              <span className="font-bold text-sm text-ink-black">
-                ✕
-              </span>
-            </button>
-
-            <h2 className="font-heading font-bold text-[24px] text-ink-black mb-1">
-              Edit Event Metadata
-            </h2>
-
-            <p className="text-xs text-ink-gray-70 mb-5 border-b border-ink-gray-30 pb-3">
-              Update details for{' '}
-              <strong>{selectedEvent?.name}</strong>.
-            </p>
-
-            <form
-              onSubmit={handleUpdateEvent}
-              className="flex flex-col gap-4"
-            >
-              <Input
-                label="Event Name *"
-                type="text"
-                value={eventName}
-                onChange={(e) =>
-                  setEventName(e.target.value)
-                }
-                required
-              />
-
-              <div className="flex gap-4 w-full flex-col sm:flex-row">
-                <div className="flex-1">
-                  <Input
-                    label="Category"
-                    type="text"
-                    value={eventCategory}
-                    onChange={(e) =>
-                      setEventCategory(e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="flex-1">
-                  <Input
-                    label="Cancellation Cutoff Hours"
-                    type="text"
-                    value={cancellationCutoffHours}
-                    onChange={(e) =>
-                      setCancellationCutoffHours(
-                        e.target.value
-                      )
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-4 w-full flex-col sm:flex-row">
-                <Input
-                  label="Target Date"
-                  type="text"
-                  placeholder="YYYY-MM-DD"
-                  value={eventDate}
-                  onChange={(e) =>
-                    setEventDate(e.target.value)
-                  }
-                  className="flex-1"
-                />
-
-                <Input
-                  label="Target Time"
-                  type="text"
-                  placeholder="HH:mm"
-                  value={eventTime}
-                  onChange={(e) =>
-                    setEventTime(e.target.value)
-                  }
-                  className="flex-1"
-                />
-              </div>
-
-              <Input
-                label="Description"
-                type="textarea"
-                value={eventDesc}
-                onChange={(e) =>
-                  setEventDesc(e.target.value)
-                }
-              />
-
-              <Input
-                label="Banner URL"
-                type="text"
-                value={eventBannerUrl}
-                onChange={(e) =>
-                  setEventBannerUrl(e.target.value)
-                }
-              />
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full font-body font-bold text-[15px] text-brand-white bg-brand-blue border-3 border-ink-black rounded-full py-3.5 hover:bg-[#1a1a5b] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 mt-3 disabled:opacity-50"
-              >
-                {isLoading
-                  ? 'Saving...'
-                  : 'Save Changes'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      <EditEventPopUp
+        isOpen={isEditEventOpen}
+        onClose={() => setIsEditEventOpen(false)}
+        onSubmit={handleUpdateEvent}
+        selectedEventName={selectedEvent?.name}
+        eventName={eventName}
+        setEventName={setEventName}
+        eventCategory={eventCategory}
+        setEventCategory={setEventCategory}
+        cancellationCutoffHours={cancellationCutoffHours}
+        setCancellationCutoffHours={setCancellationCutoffHours}
+        eventDate={eventDate}
+        setEventDate={setEventDate}
+        eventTime={eventTime}
+        setEventTime={setEventTime}
+        eventDesc={eventDesc}
+        setEventDesc={setEventDesc}
+        eventBannerUrl={eventBannerUrl}
+        setEventBannerUrl={setEventBannerUrl}
+        handleImageChange={handleImageChange}
+        isLoading={isLoading}
+      />
 
       {/* 5. Add Show Modal */}
-      {isAddShowOpen && selectedEvent && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0A0A0F]/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-brand-white border-3 border-ink-black rounded-32 shadow-soft-3d w-full max-w-[680px] my-8 p-8 flex flex-col relative animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar">
-
-            <button
-              onClick={() =>
-                setIsAddShowOpen(false)
-              }
-              className="absolute top-4 right-4 w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light transition-all"
-            >
-              <span className="font-bold text-sm text-ink-black">
-                ✕
-              </span>
-            </button>
-
-            <h2 className="font-heading font-bold text-[24px] text-ink-black mb-1">
-              Add Show & Ticket Categories
-            </h2>
-
-            <p className="text-xs text-ink-gray-70 mb-5 border-b border-ink-gray-30 pb-3">
-              Configure show schedule, venue ID, waiting room
-              threshold, and ticket pricing tiers for{' '}
-              <strong>{selectedEvent.name}</strong>.
-            </p>
-
-            <form
-              onSubmit={handleCreateShow}
-              className="flex flex-col gap-5"
-            >
-
-              {/* Show Timing */}
-              <div className="flex gap-4 w-full flex-col sm:flex-row">
-
-                <Input
-                  label="Show Date (YYYY-MM-DD) *"
-                  type="text"
-                  placeholder="2026-10-15"
-                  value={showDate}
-                  onChange={(e) =>
-                    setShowDate(e.target.value)
-                  }
-                  required
-                  className="flex-1"
-                />
-
-                <Input
-                  label="Show Time (HH:mm) *"
-                  type="text"
-                  placeholder="19:00"
-                  value={showTime}
-                  onChange={(e) =>
-                    setShowTime(e.target.value)
-                  }
-                  required
-                  className="flex-1"
-                />
-
-              </div>
-
-              {/* Show Meta */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-                <Input
-                  label="Venue ID (Optional GUID)"
-                  type="text"
-                  placeholder="e.g. 3fa85f64-5717-4562-b3fc-2c963f66afa6"
-                  value={showVenueId}
-                  onChange={(e) =>
-                    setShowVenueId(e.target.value)
-                  }
-                />
-
-                <Input
-                  label="On-Sale Date & Time"
-                  type="text"
-                  placeholder="YYYY-MM-DDTHH:mm"
-                  value={showOnSaleAt}
-                  onChange={(e) =>
-                    setShowOnSaleAt(e.target.value)
-                  }
-                />
-
-                <Input
-                  label="High Demand Threshold (Queue trigger)"
-                  type="text"
-                  placeholder="e.g. 50"
-                  value={showHighDemandThreshold}
-                  onChange={(e) =>
-                    setShowHighDemandThreshold(
-                      e.target.value
-                    )
-                  }
-                />
-
-                <Input
-                  label="Event Reminder (Minutes before)"
-                  type="text"
-                  placeholder="1440 (24h)"
-                  value={showReminderMinutesBefore}
-                  onChange={(e) =>
-                    setShowReminderMinutesBefore(
-                      e.target.value
-                    )
-                  }
-                />
-
-              </div>
-
-              <hr className="border-ink-gray-30" />
-
-              {/* Ticket Categories */}
-              <div className="flex flex-col gap-3">
-
-                <div className="flex items-center justify-between">
-
-                  <h3 className="font-body font-bold text-[15px] text-ink-black">
-                    Ticket Categories & Capacities *
-                  </h3>
-
-                  <button
-                    type="button"
-                    onClick={handleAddCategoryRow}
-                    className="font-bold text-xs text-brand-blue bg-brand-white border-2 border-ink-black rounded-full px-3 py-1 hover:bg-brand-blue-light transition-all flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus size={12} />
-                    <span>Add Tier</span>
-                  </button>
-
-                </div>
-
-                <div className="flex flex-col gap-3">
-
-                  {showCategories.map(
-                    (cat, idx) => (
-                      <div
-                        key={idx}
-                        className="flex gap-3 items-end w-full"
-                      >
-
-                        <div className="flex-1">
-                          <label className="block font-medium text-[12px] text-ink-gray-70 mb-1">
-                            Category Name
-                          </label>
-
-                          <input
-                            type="text"
-                            placeholder="General Admission, VIP, Balcony"
-                            value={cat.name}
-                            onChange={(e) =>
-                              handleCategoryChange(
-                                idx,
-                                'name',
-                                e.target.value
-                              )
-                            }
-                            className="text-[14px] text-ink-black bg-brand-white border-2 border-ink-black rounded-12 py-2 px-3 w-full outline-none focus:border-brand-blue"
-                            required
-                          />
-                        </div>
-
-                        <div className="w-24">
-                          <label className="block font-medium text-[12px] text-ink-gray-70 mb-1">
-                            Price ($)
-                          </label>
-
-                          <input
-                            type="number"
-                            step="0.01"
-                            placeholder="50"
-                            value={cat.price}
-                            onChange={(e) =>
-                              handleCategoryChange(
-                                idx,
-                                'price',
-                                e.target.value
-                              )
-                            }
-                            className="text-[14px] text-ink-black bg-brand-white border-2 border-ink-black rounded-12 py-2 px-3 w-full outline-none focus:border-brand-blue"
-                            required
-                          />
-                        </div>
-
-                        <div className="w-24">
-                          <label className="block font-medium text-[12px] text-ink-gray-70 mb-1">
-                            Capacity
-                          </label>
-
-                          <input
-                            type="number"
-                            placeholder="100"
-                            value={cat.capacity}
-                            onChange={(e) =>
-                              handleCategoryChange(
-                                idx,
-                                'capacity',
-                                e.target.value
-                              )
-                            }
-                            className="text-[14px] text-ink-black bg-brand-white border-2 border-ink-black rounded-12 py-2 px-3 w-full outline-none focus:border-brand-blue"
-                            required
-                          />
-                        </div>
-
-                        {showCategories.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleRemoveCategoryRow(
-                                idx
-                              )
-                            }
-                            className="w-9 h-9 border-2 border-ink-black rounded-12 flex items-center justify-center text-state-error bg-brand-white hover:bg-red-50 transition-all cursor-pointer shrink-0 font-bold"
-                          >
-                            ✕
-                          </button>
-                        )}
-
-                      </div>
-                    )
-                  )}
-
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full font-body font-bold text-[15px] text-brand-white bg-brand-blue border-3 border-ink-black rounded-full py-3.5 hover:bg-[#1a1a5b] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 mt-2 disabled:opacity-50"
-              >
-                {isLoading
-                  ? 'Adding Show...'
-                  : 'Add Show to Event'}
-              </button>
-
-            </form>
-          </div>
-        </div>
-      )}
+      <AddShowPopUp
+        isOpen={isAddShowOpen && !!selectedEvent}
+        onClose={() => setIsAddShowOpen(false)}
+        onSubmit={handleCreateShow}
+        selectedEventName={selectedEvent?.name}
+        showDate={showDate}
+        setShowDate={setShowDate}
+        showTime={showTime}
+        setShowTime={setShowTime}
+        showVenueId={showVenueId}
+        setShowVenueId={setShowVenueId}
+        showHighDemandThreshold={showHighDemandThreshold}
+        setShowHighDemandThreshold={setShowHighDemandThreshold}
+        showCategories={showCategories}
+        handleAddCategoryRow={handleAddCategoryRow}
+        handleCategoryChange={handleCategoryChange}
+        handleRemoveCategoryRow={handleRemoveCategoryRow}
+        isLoading={isLoading}
+      />
 
       {/* 6. Edit Show Modal */}
-      {isEditShowOpen && selectedShow && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0A0A0F]/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-brand-white border-3 border-ink-black rounded-32 shadow-soft-3d w-full max-w-[640px] my-8 p-8 flex flex-col relative animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar">
+      <EditShowPopUp
+        isOpen={isEditShowOpen && !!selectedShow}
+        onClose={() => setIsEditShowOpen(false)}
+        onSubmit={handleUpdateShow}
+        showDate={showDate}
+        setShowDate={setShowDate}
+        showTime={showTime}
+        setShowTime={setShowTime}
+        showVenueId={showVenueId}
+        setShowVenueId={setShowVenueId}
+        showHighDemandThreshold={showHighDemandThreshold}
+        setShowHighDemandThreshold={setShowHighDemandThreshold}
+        showCategories={showCategories}
+        handleAddCategoryRow={handleAddCategoryRow}
+        handleCategoryChange={handleCategoryChange}
+        handleRemoveCategoryRow={handleRemoveCategoryRow}
+        isLoading={isLoading}
+      />
 
-            <button
-              onClick={() =>
-                setIsEditShowOpen(false)
-              }
-              className="absolute top-4 right-4 w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light transition-all"
-            >
-              <span className="font-bold text-sm text-ink-black">
-                ✕
-              </span>
-            </button>
-
-            <h2 className="font-heading font-bold text-[24px] text-ink-black mb-1">
-              Edit Show Schedule & Policies
-            </h2>
-
-            <p className="text-xs text-ink-gray-70 mb-5 border-b border-ink-gray-30 pb-3">
-              Modify timing and threshold settings for this
-              show.
-            </p>
-
-            <form
-              onSubmit={handleUpdateShow}
-              className="flex flex-col gap-4"
-            >
-
-              <div className="flex gap-4 w-full flex-col sm:flex-row">
-
-                <Input
-                  label="Show Date *"
-                  type="text"
-                  value={showDate}
-                  onChange={(e) =>
-                    setShowDate(e.target.value)
-                  }
-                  required
-                  className="flex-1"
-                />
-
-                <Input
-                  label="Show Time *"
-                  type="text"
-                  value={showTime}
-                  onChange={(e) =>
-                    setShowTime(e.target.value)
-                  }
-                  required
-                  className="flex-1"
-                />
-
-              </div>
-
-              <Input
-                label="Venue ID"
-                type="text"
-                value={showVenueId}
-                onChange={(e) =>
-                  setShowVenueId(e.target.value)
-                }
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-                <Input
-                  label="High Demand Threshold"
-                  type="text"
-                  value={showHighDemandThreshold}
-                  onChange={(e) =>
-                    setShowHighDemandThreshold(
-                      e.target.value
-                    )
-                  }
-                />
-
-                <Input
-                  label="Reminder Minutes Before"
-                  type="text"
-                  value={showReminderMinutesBefore}
-                  onChange={(e) =>
-                    setShowReminderMinutesBefore(
-                      e.target.value
-                    )
-                  }
-                />
-
-              </div>
-
-              <Input
-                label="On Sale Date & Time"
-                type="text"
-                value={showOnSaleAt}
-                onChange={(e) =>
-                  setShowOnSaleAt(e.target.value)
-                }
-              />
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full font-body font-bold text-[15px] text-brand-white bg-brand-blue border-3 border-ink-black rounded-full py-3.5 hover:bg-[#1a1a5b] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 mt-3 disabled:opacity-50"
-              >
-                {isLoading
-                  ? 'Saving...'
-                  : 'Save Show Changes'}
-              </button>
-
-            </form>
-          </div>
-        </div>
-      )}
+      {/* 7. Confirm Delete / Cancel Modal */}
+      <ConfirmDeletePopUp
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        description={confirmModal.description}
+        confirmText={confirmModal.confirmText}
+        isLoading={isLoading}
+      />
 
     </div>
   );

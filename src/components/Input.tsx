@@ -1,11 +1,23 @@
-import React, { useId, useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import React, { useId, useState, useRef, useEffect } from 'react';
+import { Eye, EyeOff, Calendar as CalendarIcon, Clock as ClockIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement> {
   label: React.ReactNode;
   error?: string;
-  type?: 'text' | 'email' | 'password' | 'tel' | 'textarea' | 'checkbox';
+  type?: 'text' | 'email' | 'password' | 'tel' | 'textarea' | 'checkbox' | 'date' | 'time' | 'datetime-local';
 }
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+const WEEK_DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+const POPULAR_TIMES = [
+  '09:00', '10:00', '11:00', '12:00', '13:00', '14:00',
+  '15:00', '16:00', '17:00', '18:00', '19:00', '20:00',
+  '21:00', '22:00'
+];
 
 export const Input: React.FC<InputProps> = ({
   label,
@@ -18,6 +30,26 @@ export const Input: React.FC<InputProps> = ({
   const generatedId = useId();
   const inputId = id || generatedId;
   const [showPassword, setShowPassword] = useState(false);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(() => {
+    if (props.value) {
+      const parsed = new Date(props.value as string);
+      if (!isNaN(parsed.getTime())) return parsed;
+    }
+    return new Date();
+  });
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsPickerOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Custom checkbox layout
   if (type === 'checkbox') {
@@ -74,14 +106,41 @@ export const Input: React.FC<InputProps> = ({
     );
   }
 
-  // Standard input layout (text, email, password, tel, etc.)
   const inputProps = props as React.InputHTMLAttributes<HTMLInputElement>;
+
+  // Calendar Calculation Helpers
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const firstDayIndex = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  const handleSelectDate = (dayNum: number) => {
+    const m = String(month + 1).padStart(2, '0');
+    const d = String(dayNum).padStart(2, '0');
+    const formatted = `${year}-${m}-${d}`;
+    if (inputProps.onChange) {
+      inputProps.onChange({
+        target: { value: formatted, name: inputProps.name || '' }
+      } as React.ChangeEvent<HTMLInputElement>);
+    }
+    setIsPickerOpen(false);
+  };
+
+  const handleSelectTime = (timeStr: string) => {
+    if (inputProps.onChange) {
+      inputProps.onChange({
+        target: { value: timeStr, name: inputProps.name || '' }
+      } as React.ChangeEvent<HTMLInputElement>);
+    }
+    setIsPickerOpen(false);
+  };
+
   return (
-    <div className={`flex flex-col gap-2 w-full text-left ${className}`}>
+    <div ref={containerRef} className={`flex flex-col gap-2 w-full text-left relative ${className}`}>
       <label htmlFor={inputId} className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px]">
         {label}
       </label>
-      
+
       {type === 'password' ? (
         <div className="relative w-full">
           <input
@@ -97,6 +156,148 @@ export const Input: React.FC<InputProps> = ({
           >
             {showPassword ? <EyeOff size={20} strokeWidth={2.5} /> : <Eye size={20} strokeWidth={2.5} />}
           </button>
+        </div>
+      ) : type === 'time' ? (
+        <div className="relative w-full">
+          <input
+            id={inputId}
+            type="time"
+            onClick={(e) => {
+              try {
+                e.currentTarget.showPicker?.();
+              } catch {
+                // Ignore if already open
+              }
+            }}
+            className="font-body text-[15px] font-normal text-ink-black bg-brand-white border-3 border-ink-black rounded-16 py-3.5 pl-4 pr-12 w-full outline-none transition-all duration-150 ease-in-out placeholder-ink-gray-70 focus:border-brand-blue focus:shadow-brutal-s cursor-pointer"
+            {...inputProps}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const el = document.getElementById(inputId) as HTMLInputElement;
+              if (el?.showPicker) {
+                el.showPicker();
+              } else {
+                el?.focus();
+              }
+            }}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-blue hover:text-ink-black transition-colors cursor-pointer focus:outline-none flex items-center justify-center"
+          >
+            <ClockIcon size={20} strokeWidth={2.5} />
+          </button>
+        </div>
+      ) : type === 'date' || type === 'datetime-local' ? (
+        <div className="relative w-full">
+          <input
+            id={inputId}
+            type="text"
+            readOnly
+            value={inputProps.value || ''}
+            placeholder="YYYY-MM-DD"
+            onClick={() => setIsPickerOpen((prev) => !prev)}
+            className="font-body text-[15px] font-normal text-ink-black bg-brand-white border-3 border-ink-black rounded-16 py-3.5 pl-4 pr-12 w-full outline-none transition-all duration-150 ease-in-out placeholder-ink-gray-70 focus:border-brand-blue focus:shadow-brutal-s cursor-pointer select-none"
+          />
+          <button
+            type="button"
+            onClick={() => setIsPickerOpen((prev) => !prev)}
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-blue hover:text-ink-black transition-colors cursor-pointer focus:outline-none flex items-center justify-center"
+          >
+            <CalendarIcon size={20} strokeWidth={2.5} />
+          </button>
+
+          {/* Custom Neo-Brutalist Calendar Popover */}
+          {isPickerOpen && (
+            <div className="absolute left-0 top-full mt-2 z-[300] bg-brand-white border-3 border-ink-black rounded-24 p-5 shadow-soft-3d w-[320px] animate-in fade-in zoom-in-95 duration-150 select-none">
+              <div className="flex items-center justify-between mb-4">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewDate(new Date(year, month - 1, 1));
+                  }}
+                  className="w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center font-bold hover:bg-[#FFE94D] active:translate-y-px transition-all shadow-[2px_2px_0px_0px_#0A0A0F] cursor-pointer"
+                >
+                  <ChevronLeft size={16} strokeWidth={3} />
+                </button>
+                <span className="font-heading font-bold text-[15px] text-ink-black">
+                  {MONTH_NAMES[month]} {year}
+                </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewDate(new Date(year, month + 1, 1));
+                  }}
+                  className="w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center font-bold hover:bg-[#FFE94D] active:translate-y-px transition-all shadow-[2px_2px_0px_0px_#0A0A0F] cursor-pointer"
+                >
+                  <ChevronRight size={16} strokeWidth={3} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                {WEEK_DAYS.map((day) => (
+                  <span key={day} className="font-body font-bold text-[12px] text-ink-gray-70 uppercase">
+                    {day}
+                  </span>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-7 gap-1.5 text-center">
+                {Array.from({ length: firstDayIndex }).map((_, i) => (
+                  <div key={`empty-${i}`} />
+                ))}
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                  const dayNum = i + 1;
+                  const m = String(month + 1).padStart(2, '0');
+                  const d = String(dayNum).padStart(2, '0');
+                  const dateStr = `${year}-${m}-${d}`;
+                  const isSelected = inputProps.value === dateStr;
+
+                  return (
+                    <button
+                      key={dayNum}
+                      type="button"
+                      onClick={() => handleSelectDate(dayNum)}
+                      className={`h-9 w-9 rounded-12 font-body font-bold text-[13px] border-2 border-ink-black flex items-center justify-center transition-all cursor-pointer ${
+                        isSelected
+                          ? 'bg-brand-blue text-brand-white shadow-[2px_2px_0px_0px_#0A0A0F] scale-105'
+                          : 'bg-brand-white text-ink-black hover:bg-[#FFE94D] hover:shadow-[2px_2px_0px_0px_#0A0A0F]'
+                      }`}
+                    >
+                      {dayNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex justify-between items-center mt-4 pt-3 border-t border-ink-gray-30">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const today = new Date();
+                    const m = String(today.getMonth() + 1).padStart(2, '0');
+                    const d = String(today.getDate()).padStart(2, '0');
+                    const formatted = `${today.getFullYear()}-${m}-${d}`;
+                    if (inputProps.onChange) {
+                      inputProps.onChange({ target: { value: formatted } } as any);
+                    }
+                    setIsPickerOpen(false);
+                  }}
+                  className="font-body font-bold text-xs text-brand-blue hover:underline cursor-pointer"
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsPickerOpen(false)}
+                  className="font-body font-bold text-xs text-ink-gray-70 hover:text-ink-black cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <input

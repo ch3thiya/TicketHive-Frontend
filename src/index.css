@@ -158,3 +158,11 @@
   background: #FFE94D;
 }
 
+/* Hide duplicate native browser calendar & time indicators */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  display: none !important;
+  -webkit-appearance: none;
+}
+
