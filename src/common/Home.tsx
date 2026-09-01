@@ -3,7 +3,7 @@ import { EventCard } from '../cards/EventCard';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
 import { CustomDatePicker } from '../components/CustomDatePicker';
-import { Calendar, Filter, X, RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
+import { Calendar, X, RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || 'http://localhost:5142';
@@ -46,8 +46,6 @@ interface HomeProps {
   onCategoryChange?: (val: string) => void;
   onSelectEvent?: (eventId: string) => void;
 }
-
-const DEFAULT_CATEGORIES = ['All', 'Concerts', 'Movies', 'Sports', 'Festival', 'Theater', 'Conference'];
 
 export const Home: React.FC<HomeProps> = ({
   searchQuery = '',

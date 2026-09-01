@@ -1,5 +1,5 @@
 import React, { useId, useState, useRef, useEffect } from 'react';
-import { Eye, EyeOff, Calendar as CalendarIcon, Clock as ClockIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Eye, EyeOff, Calendar as CalendarIcon, Clock as ClockIcon } from 'lucide-react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement> {
   label: React.ReactNode;
@@ -13,11 +13,6 @@ const MONTH_NAMES = [
 ];
 const WEEK_DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
-const POPULAR_TIMES = [
-  '09:00', '10:00', '11:00', '12:00', '13:00', '14:00',
-  '15:00', '16:00', '17:00', '18:00', '19:00', '20:00',
-  '21:00', '22:00'
-];
 
 export const Input: React.FC<InputProps> = ({
   label,
@@ -126,15 +121,6 @@ export const Input: React.FC<InputProps> = ({
     setIsPickerOpen(false);
   };
 
-  const handleSelectTime = (timeStr: string) => {
-    if (inputProps.onChange) {
-      inputProps.onChange({
-        target: { value: timeStr, name: inputProps.name || '' }
-      } as React.ChangeEvent<HTMLInputElement>);
-    }
-    setIsPickerOpen(false);
-  };
-
   return (
     <div ref={containerRef} className={`flex flex-col gap-2 w-full text-left relative ${className}`}>
       <label htmlFor={inputId} className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px]">
@@ -218,7 +204,7 @@ export const Input: React.FC<InputProps> = ({
                   }}
                   className="w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center font-bold hover:bg-[#FFE94D] active:translate-y-px transition-all shadow-[2px_2px_0px_0px_#0A0A0F] cursor-pointer"
                 >
-                  <ChevronLeft size={16} strokeWidth={3} />
+                  <span className="text-lg font-bold">−</span>
                 </button>
                 <span className="font-heading font-bold text-[15px] text-ink-black">
                   {MONTH_NAMES[month]} {year}
@@ -231,7 +217,7 @@ export const Input: React.FC<InputProps> = ({
                   }}
                   className="w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center font-bold hover:bg-[#FFE94D] active:translate-y-px transition-all shadow-[2px_2px_0px_0px_#0A0A0F] cursor-pointer"
                 >
-                  <ChevronRight size={16} strokeWidth={3} />
+                  <span className="text-lg font-bold">+</span>
                 </button>
               </div>
 

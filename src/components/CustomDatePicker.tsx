@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon } from 'lucide-react';
 
 interface CustomDatePickerProps {
   id?: string;
@@ -87,7 +87,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                 }}
                 className="w-7 h-7 rounded-full border-2 border-ink-black flex items-center justify-center font-bold hover:bg-[#FFE94D] active:translate-y-px transition-all shadow-[2px_2px_0px_0px_#0A0A0F] cursor-pointer"
               >
-                <ChevronLeft size={14} strokeWidth={3} />
+                <span className="text-xl font-bold">−</span>
               </button>
               <span className="font-heading font-bold text-[14px] text-ink-black">
                 {MONTH_NAMES[month]} {year}
@@ -100,7 +100,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                 }}
                 className="w-7 h-7 rounded-full border-2 border-ink-black flex items-center justify-center font-bold hover:bg-[#FFE94D] active:translate-y-px transition-all shadow-[2px_2px_0px_0px_#0A0A0F] cursor-pointer"
               >
-                <ChevronRight size={14} strokeWidth={3} />
+                <span className="text-xl font-bold">+</span>
               </button>
             </div>
 

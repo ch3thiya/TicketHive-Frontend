@@ -5,7 +5,6 @@ import {
   Calendar,
   Clock,
   Plus,
-  Upload,
   Tag,
   AlertCircle,
   CheckCircle,
@@ -17,7 +16,7 @@ import {
   Bell,
   Users
 } from 'lucide-react';
-import { Input } from '../components/Input';
+
 import { CreateEventPopUp } from '../popUps/CreateEventPopUp';
 import { EditEventPopUp } from '../popUps/EditEventPopUp';
 import { AddShowPopUp } from '../popUps/AddShowPopUp';
