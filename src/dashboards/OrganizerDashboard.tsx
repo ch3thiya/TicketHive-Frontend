@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import {
   ArrowLeft,
@@ -18,6 +18,8 @@ import {
   Users
 } from 'lucide-react';
 import { Input } from '../components/Input';
+import { CreateEventPopUp } from '../popUps/CreateEventPopUp';
+import { EditEventPopUp } from '../popUps/EditEventPopUp';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || 'http://localhost:5142';
@@ -797,7 +799,7 @@ export const OrganizerDashboard: React.FC = () => {
           </button>
 
           <div className="bg-brand-blue text-brand-white font-body font-bold text-[12px] uppercase tracking-[1.5px] px-6 py-1.5 rounded-full select-none border-2 border-ink-black shadow-[2px_2px_0px_0px_#0A0A0F]">
-            Organizer Console (SCRUM-15)
+            Organizer Console
           </div>
 
           <button
@@ -1317,275 +1319,51 @@ export const OrganizerDashboard: React.FC = () => {
       </main>
 
       {/* 3. Create Event Modal */}
-      {isCreateEventOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0A0A0F]/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-brand-white border-3 border-ink-black rounded-32 shadow-soft-3d w-full max-w-[640px] my-8 p-8 flex flex-col relative animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar">
-
-            <button
-              onClick={() =>
-                setIsCreateEventOpen(false)
-              }
-              className="absolute top-4 right-4 w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light transition-all"
-            >
-              <span className="font-bold text-sm text-ink-black">
-                ✕
-              </span>
-            </button>
-
-            <h2 className="font-heading font-bold text-[24px] text-ink-black mb-1">
-              Create New Event
-            </h2>
-
-            <p className="text-xs text-ink-gray-70 mb-5 border-b border-ink-gray-30 pb-3">
-              Creates a new <strong>Draft</strong> event. You
-              can add shows, venues, and ticket prices next.
-            </p>
-
-            <form
-              onSubmit={handleCreateEvent}
-              className="flex flex-col gap-4"
-            >
-              <Input
-                label="Event Name *"
-                type="text"
-                placeholder="e.g. Neon Summer Festival 2026"
-                value={eventName}
-                onChange={(e) =>
-                  setEventName(e.target.value)
-                }
-                required
-              />
-
-              <div className="flex gap-4 w-full flex-col sm:flex-row">
-                <div className="flex-1">
-                  <Input
-                    label="Category"
-                    type="text"
-                    placeholder="Concert, Sports, Festival, etc."
-                    value={eventCategory}
-                    onChange={(e) =>
-                      setEventCategory(e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="flex-1">
-                  <Input
-                    label="Cancellation Cutoff (Hours Before Show)"
-                    type="text"
-                    placeholder="24"
-                    value={cancellationCutoffHours}
-                    onChange={(e) =>
-                      setCancellationCutoffHours(
-                        e.target.value
-                      )
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-4 w-full flex-col sm:flex-row">
-                <Input
-                  label="Target Date (Optional)"
-                  type="text"
-                  placeholder="YYYY-MM-DD"
-                  value={eventDate}
-                  onChange={(e) =>
-                    setEventDate(e.target.value)
-                  }
-                  className="flex-1"
-                />
-
-                <Input
-                  label="Target Time (Optional)"
-                  type="text"
-                  placeholder="HH:mm"
-                  value={eventTime}
-                  onChange={(e) =>
-                    setEventTime(e.target.value)
-                  }
-                  className="flex-1"
-                />
-              </div>
-
-              <Input
-                label="Description"
-                type="textarea"
-                placeholder="Describe the event, line-up, special rules..."
-                value={eventDesc}
-                onChange={(e) =>
-                  setEventDesc(e.target.value)
-                }
-              />
-
-              {/* Banner Upload / URL */}
-              <div className="flex flex-col gap-2">
-
-                <label className="font-semibold text-[14px] text-ink-black">
-                  Event Banner URL or Upload
-                </label>
-
-                <Input
-                  label=""
-                  type="text"
-                  placeholder="https://example.com/banner.jpg"
-                  value={eventBannerUrl}
-                  onChange={(e) =>
-                    setEventBannerUrl(e.target.value)
-                  }
-                />
-
-                <label className="border-2 border-dashed border-ink-gray-30 bg-[#F9F9FC] rounded-16 p-4 flex items-center justify-center gap-2 cursor-pointer hover:bg-brand-blue-light/35 transition-all text-xs font-bold text-ink-black">
-                  <Upload
-                    size={16}
-                    className="text-brand-blue"
-                  />
-
-                  <span>Upload from Computer</span>
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full font-body font-bold text-[15px] text-brand-white bg-brand-blue border-3 border-ink-black rounded-full py-3.5 hover:bg-[#1a1a5b] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 mt-3 disabled:opacity-50"
-              >
-                {isLoading
-                  ? 'Creating...'
-                  : 'Save Draft Event'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      <CreateEventPopUp
+        isOpen={isCreateEventOpen}
+        onClose={() => setIsCreateEventOpen(false)}
+        onSubmit={handleCreateEvent}
+        eventName={eventName}
+        setEventName={setEventName}
+        eventCategory={eventCategory}
+        setEventCategory={setEventCategory}
+        cancellationCutoffHours={cancellationCutoffHours}
+        setCancellationCutoffHours={setCancellationCutoffHours}
+        eventDate={eventDate}
+        setEventDate={setEventDate}
+        eventTime={eventTime}
+        setEventTime={setEventTime}
+        eventDesc={eventDesc}
+        setEventDesc={setEventDesc}
+        eventBannerUrl={eventBannerUrl}
+        setEventBannerUrl={setEventBannerUrl}
+        handleImageChange={handleImageChange}
+        isLoading={isLoading}
+      />
 
       {/* 4. Edit Event Modal */}
-      {isEditEventOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0A0A0F]/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
-          <div className="bg-brand-white border-3 border-ink-black rounded-32 shadow-soft-3d w-full max-w-[640px] my-8 p-8 flex flex-col relative animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar">
-
-            <button
-              onClick={() =>
-                setIsEditEventOpen(false)
-              }
-              className="absolute top-4 right-4 w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light transition-all"
-            >
-              <span className="font-bold text-sm text-ink-black">
-                ✕
-              </span>
-            </button>
-
-            <h2 className="font-heading font-bold text-[24px] text-ink-black mb-1">
-              Edit Event Metadata
-            </h2>
-
-            <p className="text-xs text-ink-gray-70 mb-5 border-b border-ink-gray-30 pb-3">
-              Update details for{' '}
-              <strong>{selectedEvent?.name}</strong>.
-            </p>
-
-            <form
-              onSubmit={handleUpdateEvent}
-              className="flex flex-col gap-4"
-            >
-              <Input
-                label="Event Name *"
-                type="text"
-                value={eventName}
-                onChange={(e) =>
-                  setEventName(e.target.value)
-                }
-                required
-              />
-
-              <div className="flex gap-4 w-full flex-col sm:flex-row">
-                <div className="flex-1">
-                  <Input
-                    label="Category"
-                    type="text"
-                    value={eventCategory}
-                    onChange={(e) =>
-                      setEventCategory(e.target.value)
-                    }
-                  />
-                </div>
-
-                <div className="flex-1">
-                  <Input
-                    label="Cancellation Cutoff Hours"
-                    type="text"
-                    value={cancellationCutoffHours}
-                    onChange={(e) =>
-                      setCancellationCutoffHours(
-                        e.target.value
-                      )
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-4 w-full flex-col sm:flex-row">
-                <Input
-                  label="Target Date"
-                  type="text"
-                  placeholder="YYYY-MM-DD"
-                  value={eventDate}
-                  onChange={(e) =>
-                    setEventDate(e.target.value)
-                  }
-                  className="flex-1"
-                />
-
-                <Input
-                  label="Target Time"
-                  type="text"
-                  placeholder="HH:mm"
-                  value={eventTime}
-                  onChange={(e) =>
-                    setEventTime(e.target.value)
-                  }
-                  className="flex-1"
-                />
-              </div>
-
-              <Input
-                label="Description"
-                type="textarea"
-                value={eventDesc}
-                onChange={(e) =>
-                  setEventDesc(e.target.value)
-                }
-              />
-
-              <Input
-                label="Banner URL"
-                type="text"
-                value={eventBannerUrl}
-                onChange={(e) =>
-                  setEventBannerUrl(e.target.value)
-                }
-              />
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full font-body font-bold text-[15px] text-brand-white bg-brand-blue border-3 border-ink-black rounded-full py-3.5 hover:bg-[#1a1a5b] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 mt-3 disabled:opacity-50"
-              >
-                {isLoading
-                  ? 'Saving...'
-                  : 'Save Changes'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      <EditEventPopUp
+        isOpen={isEditEventOpen}
+        onClose={() => setIsEditEventOpen(false)}
+        onSubmit={handleUpdateEvent}
+        selectedEventName={selectedEvent?.name}
+        eventName={eventName}
+        setEventName={setEventName}
+        eventCategory={eventCategory}
+        setEventCategory={setEventCategory}
+        cancellationCutoffHours={cancellationCutoffHours}
+        setCancellationCutoffHours={setCancellationCutoffHours}
+        eventDate={eventDate}
+        setEventDate={setEventDate}
+        eventTime={eventTime}
+        setEventTime={setEventTime}
+        eventDesc={eventDesc}
+        setEventDesc={setEventDesc}
+        eventBannerUrl={eventBannerUrl}
+        setEventBannerUrl={setEventBannerUrl}
+        handleImageChange={handleImageChange}
+        isLoading={isLoading}
+      />
 
       {/* 5. Add Show Modal */}
       {isAddShowOpen && selectedEvent && (
@@ -1622,9 +1400,8 @@ export const OrganizerDashboard: React.FC = () => {
               <div className="flex gap-4 w-full flex-col sm:flex-row">
 
                 <Input
-                  label="Show Date (YYYY-MM-DD) *"
-                  type="text"
-                  placeholder="2026-10-15"
+                  label="Show Date *"
+                  type="date"
                   value={showDate}
                   onChange={(e) =>
                     setShowDate(e.target.value)
@@ -1635,8 +1412,7 @@ export const OrganizerDashboard: React.FC = () => {
 
                 <Input
                   label="Show Time (HH:mm) *"
-                  type="text"
-                  placeholder="19:00"
+                  type="time"
                   value={showTime}
                   onChange={(e) =>
                     setShowTime(e.target.value)
@@ -1662,8 +1438,7 @@ export const OrganizerDashboard: React.FC = () => {
 
                 <Input
                   label="On-Sale Date & Time"
-                  type="text"
-                  placeholder="YYYY-MM-DDTHH:mm"
+                  type="datetime-local"
                   value={showOnSaleAt}
                   onChange={(e) =>
                     setShowOnSaleAt(e.target.value)
@@ -1861,7 +1636,7 @@ export const OrganizerDashboard: React.FC = () => {
 
                 <Input
                   label="Show Date *"
-                  type="text"
+                  type="date"
                   value={showDate}
                   onChange={(e) =>
                     setShowDate(e.target.value)
@@ -1872,7 +1647,7 @@ export const OrganizerDashboard: React.FC = () => {
 
                 <Input
                   label="Show Time *"
-                  type="text"
+                  type="time"
                   value={showTime}
                   onChange={(e) =>
                     setShowTime(e.target.value)
