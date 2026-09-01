@@ -24,7 +24,7 @@ import { EditShowPopUp } from '../popUps/EditShowPopUp';
 import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
 
 const CATALOG_API_URL =
-  import.meta.env.VITE_CATALOG_API_URL || 'http://localhost:5142';
+  import.meta.env.VITE_CATALOG_API_URL || '';
 
 interface TicketCategory {
   id?: string;

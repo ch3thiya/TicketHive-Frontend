@@ -126,8 +126,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const syncAccount = async () => {
       if (oidc.isAuthenticated && accessToken) {
         try {
+          const IDENTITY_API_URL = import.meta.env.VITE_IDENTITY_API_URL || '';
           console.log("Syncing authenticated user account with backend database...");
-          const response = await apiFetch('http://localhost:5051/api/identity/accounts/sync', {
+          const response = await apiFetch(`${IDENTITY_API_URL}/api/identity/accounts/sync`, {
             method: 'POST'
           });
           if (response.ok) {

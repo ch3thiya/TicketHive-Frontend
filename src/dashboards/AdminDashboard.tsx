@@ -17,7 +17,7 @@ interface PendingRequest {
   userEmail: string;
 }
 
-const API_BASE_URL = 'http://localhost:5051';
+const API_BASE_URL = import.meta.env.VITE_IDENTITY_API_URL || '';
 
 // Hardcoded managed venues list matching the new design layout
 const INITIAL_VENUES = [
