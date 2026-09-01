@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { EventCard } from '../cards/EventCard';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
+import { CustomDatePicker } from '../components/CustomDatePicker';
 import { Calendar, Filter, X, RefreshCw, AlertCircle, Sparkles } from 'lucide-react';
 
 const CATALOG_API_URL =
@@ -229,17 +230,26 @@ export const Home: React.FC<HomeProps> = ({
 
   return (
     <div className="w-full flex flex-col bg-brand-white">
-      {/* Hero Banner */}
+      {/* Hero Banner with Wiramaya Cover Background */}
       {!hasActiveFilters && (
-        <section className="bg-brand-blue text-brand-white py-14 md:py-16 px-6 border-b-3 border-ink-black w-full relative overflow-hidden">
+        <section className="relative text-brand-white py-16 md:py-24 px-6 border-b-3 border-ink-black w-full overflow-hidden bg-ink-black">
+          {/* Background Cover Image */}
+          <img
+            src="/wiramaya_cover.jpg"
+            alt="Wiramaya Cover"
+            className="absolute inset-0 w-full h-full object-cover object-center z-0"
+          />
+          {/* Dark Overlay Gradient so cover image is clearly visible while text stays readable */}
+          <div className="absolute inset-0 bg-gradient-to-r from-ink-black/85 via-ink-black/60 to-transparent z-0" />
+
           <div className="max-w-7xl mx-auto flex flex-col items-start gap-4 relative z-10">
             <Badge variant="yellow" uppercase={true}>
-              🔥 Trending Now
+              🔥 Trending Event
             </Badge>
-            <h1 className="font-heading font-extrabold text-[36px] md:text-[52px] text-brand-white leading-tight mt-1 max-w-3xl">
+            <h1 className="font-heading font-extrabold text-[36px] md:text-[52px] text-brand-white leading-tight mt-1 max-w-3xl drop-shadow-lg">
               {featuredEvent ? featuredEvent.name : 'Discover Live Music, Sports & Entertainment'}
             </h1>
-            <p className="font-body text-[16px] md:text-[18px] text-brand-white/90 max-w-2xl">
+            <p className="font-body text-[16px] md:text-[18px] text-brand-white/95 max-w-2xl drop-shadow-md">
               {featuredEvent
                 ? `${formatDateDisplay(featuredEvent)} • Explore tickets, venues and scheduled shows.`
                 : 'The easiest way to discover live events and book tickets you can trust.'}
@@ -261,100 +271,48 @@ export const Home: React.FC<HomeProps> = ({
       )}
 
       {/* Main Content Area */}
-      <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col gap-10 w-full">
-        {/* Filter and Search Bar Section */}
-        <section className="bg-brand-white border-3 border-ink-black rounded-28 p-6 shadow-brutal-m flex flex-col gap-6">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <h2 className="font-heading font-bold text-xl text-ink-black flex items-center gap-2">
-              <Filter size={20} className="text-brand-blue" />
-              Browse & Filter Events
-            </h2>
+      <div className="max-w-7xl mx-auto py-10 flex flex-col gap-10 w-full">
+        {/* Minimal Neo-Brutalist Date Filter Bar */}
+        <section className="bg-brand-white border-3 border-ink-black rounded-full px-6 py-3.5 shadow-brutal-s flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-brand-blue-light border-2 border-ink-black flex items-center justify-center text-brand-blue shrink-0">
+              <Calendar size={16} />
+            </div>
+            <span className="font-heading font-bold text-sm text-ink-black tracking-wide">
+              Filter by Date:
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <CustomDatePicker
+              label="From"
+              value={fromDate}
+              onChange={setFromDate}
+            />
+
+            <span className="text-ink-gray-30 font-bold hidden sm:inline">•</span>
+
+            <CustomDatePicker
+              label="To"
+              value={toDate}
+              onChange={setToDate}
+            />
 
             {hasActiveFilters && (
               <button
                 onClick={handleClearFilters}
-                className="inline-flex items-center gap-1.5 text-xs font-body font-bold text-state-error hover:underline cursor-pointer select-none"
+                className="inline-flex items-center gap-1 text-xs font-body font-bold text-state-error hover:bg-red-50 border-2 border-ink-black rounded-full px-3 py-1.5 transition-all cursor-pointer ml-2 select-none"
               >
-                <X size={14} />
-                Clear All Filters
+                <X size={13} />
+                <span>Reset</span>
               </button>
             )}
           </div>
 
-          {/* Category Filter Chips */}
-          <div className="flex flex-wrap items-center gap-2.5">
-            {DEFAULT_CATEGORIES.map((cat) => {
-              const isSelected =
-                (cat === 'All' && (!selectedCategory || selectedCategory === 'All')) ||
-                selectedCategory.toLowerCase() === cat.toLowerCase();
-
-              return (
-                <button
-                  key={cat}
-                  onClick={() => onCategoryChange?.(cat)}
-                  className={`font-body text-sm font-bold px-4 py-2 rounded-full border-2 border-ink-black transition-all cursor-pointer select-none ${
-                    isSelected
-                      ? 'bg-brand-blue text-brand-white shadow-brutal-s -translate-x-px -translate-y-px'
-                      : 'bg-brand-white text-ink-black hover:bg-brand-blue-light'
-                  }`}
-                >
-                  {cat}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Date Range & Additional Filter Controls */}
-          <div className="flex flex-wrap items-center gap-4 pt-4 border-t-2 border-ink-gray-30 text-sm font-body">
-            <div className="flex items-center gap-2">
-              <Calendar size={16} className="text-ink-gray-70" />
-              <span className="font-bold text-ink-black text-xs uppercase tracking-wider">
-                Date Range:
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label htmlFor="filter-from-date" className="text-xs text-ink-gray-70 font-medium">
-                From:
-              </label>
-              <input
-                id="filter-from-date"
-                type="date"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-                className="bg-[#F9F9FC] border-2 border-ink-black rounded-full px-3 py-1.5 text-xs text-ink-black outline-none focus:border-brand-blue font-body"
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <label htmlFor="filter-to-date" className="text-xs text-ink-gray-70 font-medium">
-                To:
-              </label>
-              <input
-                id="filter-to-date"
-                type="date"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-                className="bg-[#F9F9FC] border-2 border-ink-black rounded-full px-3 py-1.5 text-xs text-ink-black outline-none focus:border-brand-blue font-body"
-              />
-            </div>
-
-            {/* Optional Venue ID filter */}
-            <div className="flex items-center gap-2 ml-auto">
-              <input
-                type="text"
-                placeholder="Filter by Venue UUID..."
-                value={venueIdFilter}
-                onChange={(e) => setVenueIdFilter(e.target.value)}
-                className="bg-[#F9F9FC] border-2 border-ink-black rounded-full px-3.5 py-1.5 text-xs text-ink-black outline-none focus:border-brand-blue font-body w-48 placeholder-ink-gray-70"
-              />
-            </div>
-          </div>
-
           {dateError && (
-            <span className="font-body text-xs font-semibold text-state-error">
+            <div className="w-full text-right font-body text-xs font-semibold text-state-error">
               {dateError}
-            </span>
+            </div>
           )}
         </section>
 

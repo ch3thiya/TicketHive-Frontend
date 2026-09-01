@@ -762,6 +762,18 @@ export const OrganizerDashboard: React.FC = () => {
       show.reminderMinutesBefore?.toString() || '1440'
     );
 
+    if (show.ticketCategories && show.ticketCategories.length > 0) {
+      setShowCategories(
+        show.ticketCategories.map((c) => ({
+          name: c.name || '',
+          price: c.price !== undefined && c.price !== null ? c.price.toString() : '',
+          capacity: c.capacity !== undefined && c.capacity !== null ? c.capacity.toString() : ''
+        }))
+      );
+    } else {
+      setShowCategories([{ name: '', price: '', capacity: '' }]);
+    }
+
     setIsEditShowOpen(true);
   };
 

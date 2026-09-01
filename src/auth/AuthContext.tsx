@@ -88,7 +88,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
-    await oidc.signoutRedirect();
+    setDbUser(null);
+    try {
+      await oidc.removeUser();
+    } catch (e) {
+      console.error(e);
+    }
+    window.localStorage.clear();
+    window.sessionStorage.clear();
+
+    window.history.pushState({}, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    try {
+      await oidc.signoutRedirect();
+    } catch (e) {
+      console.error(e);
+      window.location.href = '/';
+    }
   };
 
   // Helper method to make authenticated requests to API services

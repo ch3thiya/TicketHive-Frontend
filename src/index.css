@@ -158,11 +158,18 @@
   background: #FFE94D;
 }
 
-/* Hide duplicate native browser calendar & time indicators */
+/* Make native date & time picker indicators cover full input area transparently for instant click-to-open */
 input[type="date"]::-webkit-calendar-picker-indicator,
 input[type="time"]::-webkit-calendar-picker-indicator,
 input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-  display: none !important;
-  -webkit-appearance: none;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
