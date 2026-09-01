@@ -1,7 +1,7 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
 import { Input } from '../components/Input';
-import { TicketCategoryInput } from './AddShowPopUp';
+import type { TicketCategoryInput } from './AddShowPopUp';
 
 interface EditShowPopUpProps {
   isOpen: boolean;

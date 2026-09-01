@@ -602,7 +602,12 @@ export const OrganizerDashboard: React.FC = () => {
           : null,
         reminderMinutesBefore: showReminderMinutesBefore
           ? parseInt(showReminderMinutesBefore, 10)
-          : null
+          : null,
+        categories: showCategories.map(c => ({
+          name: c.name.trim(),
+          price: parseFloat(c.price) || 0,
+          capacity: parseInt(c.capacity, 10) || 0
+        }))
       };
 
       const res = await apiFetch(
