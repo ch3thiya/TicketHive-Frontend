@@ -149,6 +149,27 @@ export const CreateEventPopUp: React.FC<CreateEventPopUpProps> = ({
                 className="hidden"
               />
             </label>
+
+            {/* Banner Image Preview */}
+            {eventBannerUrl && (
+              <div className="relative mt-2 border-3 border-ink-black rounded-20 overflow-hidden bg-brand-white shadow-soft-3d">
+                <img
+                  src={eventBannerUrl}
+                  alt="Event Banner Preview"
+                  className="w-full h-[180px] object-cover"
+                />
+                <div className="absolute top-3 left-3 bg-brand-white border-2 border-ink-black rounded-full px-3 py-1 text-[11px] font-bold text-ink-black shadow-[2px_2px_0px_0px_#0A0A0F]">
+                  Banner Preview
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEventBannerUrl('')}
+                  className="absolute top-3 right-3 bg-[#FF3B3B] text-brand-white border-2 border-ink-black rounded-full px-3 py-1 text-[11px] font-bold shadow-[2px_2px_0px_0px_#0A0A0F] hover:bg-[#D32F2F] cursor-pointer transition-all"
+                >
+                  Remove Image
+                </button>
+              </div>
+            )}
           </div>
 
           <button
