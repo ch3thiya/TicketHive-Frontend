@@ -6,12 +6,18 @@ interface NavbarProps {
   onSignUpClick: () => void;
   onLoginClick: () => void;
   onLogoClick: () => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
+  onCategoryClick?: (category: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   onSignUpClick,
   onLoginClick,
   onLogoClick,
+  searchQuery = '',
+  onSearchChange,
+  onCategoryClick,
 }) => {
   const { isAuthenticated, logout, role } = useAuth();
 
@@ -34,13 +40,34 @@ export const Navbar: React.FC<NavbarProps> = ({
           </a>
           
           <div className="flex items-center gap-6 max-md:hidden">
-            <a href="#" onClick={(e) => { e.preventDefault(); alert('Concerts clicked 🎸'); }} className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors">
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                onCategoryClick?.('Concerts');
+              }}
+              className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors select-none"
+            >
               Concerts
             </a>
-            <a href="#" onClick={(e) => { e.preventDefault(); alert('Movies clicked 🎬'); }} className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors">
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                onCategoryClick?.('Movies');
+              }}
+              className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors select-none"
+            >
               Movies
             </a>
-            <a href="#" onClick={(e) => { e.preventDefault(); alert('Sports clicked ⚽'); }} className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors">
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                onCategoryClick?.('Sports');
+              }}
+              className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors select-none"
+            >
               Sports
             </a>
           </div>
@@ -51,6 +78,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           <input
             type="text"
             placeholder="Search events, movies, teams..."
+            value={searchQuery}
+            onChange={(e) => onSearchChange?.(e.target.value)}
             className="w-full bg-[#F9F9FC] border-[2.5px] border-ink-black rounded-full py-2 px-5 font-body text-[14px] text-ink-black outline-none placeholder-ink-gray-70 focus:border-brand-blue transition-colors"
           />
         </div>

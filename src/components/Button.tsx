@@ -29,11 +29,14 @@ export const Button: React.FC<ButtonProps> = ({
     : 'py-[12px] px-[22px]';
 
   // Shadows and active/hover interactions matching neo-brutalist spec
-  const shadowClasses = shadow === 'M'
-    ? 'shadow-brutal-m hover:shadow-[8px_8px_0px_0px_#0A0A0F] active:shadow-[2px_2px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-[4px] active:translate-y-[4px]'
-    : shadow === 'S'
-      ? 'shadow-brutal-s hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:shadow-[1px_1px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-[3px] active:translate-y-[3px]'
-      : 'shadow-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-y-0 active:translate-x-0';
+  let shadowClasses: string;
+  if (shadow === 'M') {
+    shadowClasses = 'shadow-brutal-m hover:shadow-[8px_8px_0px_0px_#0A0A0F] active:shadow-[2px_2px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-[4px] active:translate-y-[4px]';
+  } else if (shadow === 'S') {
+    shadowClasses = 'shadow-brutal-s hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:shadow-[1px_1px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-[3px] active:translate-y-[3px]';
+  } else {
+    shadowClasses = 'shadow-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-y-0 active:translate-x-0';
+  }
 
   const baseClasses = 'inline-flex items-center justify-center font-body font-bold text-base tracking-[0.2px] rounded-full border-3 border-ink-black cursor-pointer select-none text-center align-middle transition-all duration-150 ease-in-out focus-visible:outline-3 focus-visible:outline-brand-blue focus-visible:outline-offset-4 disabled:bg-ink-gray-30 disabled:text-ink-gray-70 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none';
 

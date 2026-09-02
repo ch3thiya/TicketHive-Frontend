@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Home } from './common/Home';
+import { EventDetail } from './common/EventDetail';
 import { Login } from './auth/Login';
 import { Register } from './auth/Register';
 import { AdminLogin } from './auth/AdminLogin';
@@ -16,6 +17,8 @@ import { useAuth } from './auth/AuthContext';
 function App() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const { isAuthenticated, role, login, isLoading } = useAuth();
 
   const navigateTo = (path: string) => {
@@ -106,8 +109,26 @@ function App() {
       return <OrganizerDashboard />;
     }
 
+    if (currentPath.startsWith('/events/')) {
+      const eventId = currentPath.replace('/events/', '').split('?')[0];
+      return (
+        <EventDetail
+          eventId={eventId}
+          onNavigateBack={() => navigateTo('/')}
+        />
+      );
+    }
+
     // Default route represents Home landing page
-    return <Home />;
+    return (
+      <Home
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        selectedCategory={selectedCategory}
+        onCategoryChange={setSelectedCategory}
+        onSelectEvent={(eventId) => navigateTo(`/events/${eventId}`)}
+      />
+    );
   };
 
   if (isLoading) {
@@ -137,9 +158,26 @@ function App() {
       {/* Render Global Navbar only on non-auth routes */}
       {!isAuthRoute && (
         <Navbar
-          onLogoClick={() => navigateTo('/')}
+          onLogoClick={() => {
+            setSearchQuery('');
+            setSelectedCategory('All');
+            navigateTo('/');
+          }}
           onLoginClick={login}
           onSignUpClick={() => setIsSignUpOpen(true)}
+          searchQuery={searchQuery}
+          onSearchChange={(query) => {
+            setSearchQuery(query);
+            if (currentPath !== '/') {
+              navigateTo('/');
+            }
+          }}
+          onCategoryClick={(category) => {
+            setSelectedCategory(category);
+            if (currentPath !== '/') {
+              navigateTo('/');
+            }
+          }}
         />
       )}
 

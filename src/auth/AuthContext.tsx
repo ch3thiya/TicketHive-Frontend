@@ -91,12 +91,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setDbUser(null);
     try {
       await oidc.removeUser();
-    } catch {
-      // Ignore if user already removed
+    } catch (e) {
+      console.error(e);
     }
     window.localStorage.clear();
     window.sessionStorage.clear();
-    await oidc.signoutRedirect();
+
+    window.history.pushState({}, '', '/');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    try {
+      await oidc.signoutRedirect();
+    } catch (e) {
+      console.error(e);
+      window.location.href = '/';
+    }
   };
 
   // Helper method to make authenticated requests to API services
@@ -117,8 +126,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const syncAccount = async () => {
       if (oidc.isAuthenticated && accessToken) {
         try {
+          const IDENTITY_API_URL = import.meta.env.VITE_IDENTITY_API_URL || '';
           console.log("Syncing authenticated user account with backend database...");
-          const response = await apiFetch('http://localhost:5051/api/identity/accounts/sync', {
+          const response = await apiFetch(`${IDENTITY_API_URL}/api/identity/accounts/sync`, {
             method: 'POST'
           });
           if (response.ok) {

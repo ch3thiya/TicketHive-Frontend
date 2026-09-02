@@ -194,7 +194,7 @@ docker build -t tickethive-frontend .
 ### Run the Container
 
 ```bash
-docker run -p 3000:3000 tickethive-frontend
+docker run -p 3000:80 tickethive-frontend
 ```
 
 The exact port may change depending on the frontend container configuration.

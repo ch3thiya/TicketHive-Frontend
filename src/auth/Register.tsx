@@ -11,7 +11,7 @@ interface RegisterProps {
   onNavigateToHome: () => void;
 }
 
-const API_BASE_URL = 'http://localhost:5051';
+const API_BASE_URL = import.meta.env.VITE_IDENTITY_API_URL || '';
 
 export const Register: React.FC<RegisterProps> = ({
   initialRole,
