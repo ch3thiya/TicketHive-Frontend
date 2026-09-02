@@ -71,9 +71,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const rolesClaim = profile['roles'] || profile['groups'] || [];
   const roles = Array.isArray(rolesClaim) ? rolesClaim : [rolesClaim];
 
-  if (roles.includes('Admin') || roles.includes('admin')) {
+  const rolesList = roles.map(r => String(r).toLowerCase());
+  if (rolesList.includes('admin') || rolesList.includes('admins')) {
     tokenRole = 'admin';
-  } else if (roles.includes('Organizer') || roles.includes('organizer')) {
+  } else if (rolesList.includes('organizer') || rolesList.includes('organizers')) {
     tokenRole = 'organizer';
   } else if (oidc.isAuthenticated) {
     tokenRole = 'customer'; // Default role for authenticated users
