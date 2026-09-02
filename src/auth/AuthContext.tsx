@@ -13,7 +13,7 @@ const oidcConfig = {
   scope: 'openid profile email groups',
   userStore: new WebStorageStateStore({ store: window.localStorage }),
   automaticSilentRenew: true,
-  
+
   metadata: {
     issuer: 'https://api.asgardeo.io/t/orgvx6qo/oauth2/token',
     authorization_endpoint: 'https://api.asgardeo.io/t/orgvx6qo/oauth2/authorize',
@@ -55,7 +55,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Extract Email
   const email = (profile.email as string) || (profile.sub as string) || null;
-  
+
   // Extract Name
   const fullName = (profile.name as string) || (profile.given_name as string) || null;
 
@@ -114,7 +114,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (accessToken) {
       headers.set('Authorization', `Bearer ${accessToken}`);
     }
-    
+
     return fetch(url, {
       ...options,
       headers
@@ -141,6 +141,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         } catch (error) {
           console.error("Error executing account sync:", error);
         }
+      } else if (!oidc.isAuthenticated) {
+        setDbUser(null);
       }
     };
     syncAccount();
