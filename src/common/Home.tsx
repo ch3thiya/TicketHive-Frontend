@@ -232,7 +232,7 @@ export const Home: React.FC<HomeProps> = ({
     <div className="w-full flex flex-col bg-brand-white">
       {/* Hero Banner with Wiramaya Cover Background */}
       {!hasActiveFilters && (
-        <section className="relative text-brand-white py-16 md:py-24 px-6 border-b-3 border-ink-black w-full overflow-hidden bg-ink-black">
+        <section className="relative text-brand-white py-24 md:py-36 min-h-[440px] md:min-h-[520px] px-6 border-b-3 border-ink-black w-full overflow-hidden bg-ink-black flex items-center">
           {/* Background Cover Image */}
           <img
             src="/wiramaya_cover.jpg"
