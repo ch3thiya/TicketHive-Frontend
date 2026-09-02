@@ -6,7 +6,7 @@ import { WebStorageStateStore } from 'oidc-client-ts';
 // Config for WSO2 Identity Server (Local Dev default)
 const oidcConfig = {
   authority: 'https://api.asgardeo.io/t/orgvx6qo/oauth2/token',
-  client_id: import.meta.env.VITE_ASGARDEO_CLIENT_ID || 'YOUR_ASGARDEO_SPA_CLIENT_ID',
+  client_id: import.meta.env.VITE_ASGARDEO_CLIENT_ID || 'vAVPIdqvfL3f78HtKFBPMLv3Qywa',
   redirect_uri: window.location.origin,
   post_logout_redirect_uri: window.location.origin,
   response_type: 'code',
