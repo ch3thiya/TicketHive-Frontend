@@ -113,7 +113,8 @@ export const Home: React.FC<HomeProps> = ({
         const response = await fetch(url);
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || `Failed to fetch events (${response.status})`);
+          const detailMsg = errorData.details ? `: ${errorData.details}` : '';
+          throw new Error((errorData.message || `Failed to fetch events (${response.status})`) + detailMsg);
         }
 
         const data: EventItem[] = await response.json();
