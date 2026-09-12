@@ -34,6 +34,8 @@ declare module 'lucide-react' {
   export const RefreshCw: Icon;
   export const Sparkles: Icon;
   export const Search: Icon;
+  export const ArrowRight: Icon;
+  export const Lock: Icon;
 
   export const icons: Record<string, Icon>;
 }
