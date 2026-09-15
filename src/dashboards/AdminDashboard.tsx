@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { ArrowLeft, MapPin, Plus } from 'lucide-react';
+import { ArrowLeft, MapPin, Plus, Edit3, Trash2 } from 'lucide-react';
 import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
+import { VenueFormPopUp } from '../popUps/VenueFormPopUp';
+import { fetchVenues, createVenue, updateVenue, deleteVenue, type Venue, type VenueInput } from '../common/venueApi';
 
 interface PendingRequest {
   requestId: string;
@@ -18,16 +20,6 @@ interface PendingRequest {
 }
 
 const API_BASE_URL = import.meta.env.VITE_IDENTITY_API_URL || '';
-
-// Hardcoded managed venues list matching the new design layout
-const INITIAL_VENUES = [
-  { name: 'Madison Square Garden', location: 'New York, NY', capacity: '20,789' },
-  { name: 'SoFi Stadium', location: 'Inglewood, CA', capacity: '70,240' },
-  { name: 'Crypto.com Arena', location: 'Los Angeles, CA', capacity: '19,068' },
-  { name: 'Red Rocks Amphitheatre', location: 'Morrison, CO', capacity: '9,525' },
-  { name: 'United Center', location: 'Chicago, IL', capacity: '23,500' },
-  { name: 'Fenway Park', location: 'Boston, MA', capacity: '37,755' }
-];
 
 export const AdminDashboard: React.FC = () => {
   const { isAuthenticated, role, apiFetch, isLoading: authLoading } = useAuth();
@@ -48,7 +40,23 @@ export const AdminDashboard: React.FC = () => {
   const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
   const [deletingOrgName, setDeletingOrgName] = useState('');
 
-  const [venues, setVenues] = useState(INITIAL_VENUES);
+  // Managed venues states
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [venuesLoading, setVenuesLoading] = useState(true);
+  const [venuesError, setVenuesError] = useState<string | null>(null);
+
+  // Venue create/edit modal states
+  const [isVenueFormOpen, setIsVenueFormOpen] = useState(false);
+  const [venueFormMode, setVenueFormMode] = useState<'create' | 'edit'>('create');
+  const [editingVenue, setEditingVenue] = useState<Venue | null>(null);
+  const [venueFormLoading, setVenueFormLoading] = useState(false);
+  const [venueFormError, setVenueFormError] = useState<string | null>(null);
+
+  // Venue delete modal states
+  const [isVenueDeleteOpen, setIsVenueDeleteOpen] = useState(false);
+  const [deletingVenue, setDeletingVenue] = useState<Venue | null>(null);
+  const [venueDeleteLoading, setVenueDeleteLoading] = useState(false);
+  const [venueActionError, setVenueActionError] = useState<string | null>(null);
 
   const fetchPendingRequests = useCallback(async () => {
     try {
@@ -82,14 +90,28 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [apiFetch]);
 
+  const fetchVenuesList = useCallback(async () => {
+    setVenuesLoading(true);
+    try {
+      const data = await fetchVenues(apiFetch);
+      setVenues(data);
+      setVenuesError(null);
+    } catch (err) {
+      setVenuesError(err instanceof Error ? err.message : 'Failed to load venues.');
+    } finally {
+      setVenuesLoading(false);
+    }
+  }, [apiFetch]);
+
   useEffect(() => {
     if (isAuthenticated && role === 'admin') {
       Promise.resolve().then(() => {
         fetchPendingRequests();
         fetchApprovedOrganizers();
+        fetchVenuesList();
       });
     }
-  }, [isAuthenticated, role, fetchPendingRequests, fetchApprovedOrganizers]);
+  }, [isAuthenticated, role, fetchPendingRequests, fetchApprovedOrganizers, fetchVenuesList]);
 
   const handleApprove = async (requestId: string) => {
     setActioningId(requestId);
@@ -142,16 +164,63 @@ export const AdminDashboard: React.FC = () => {
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
-  const handleAddVenue = () => {
-    const name = prompt('Enter venue name:');
-    if (!name) return;
-    const location = prompt('Enter venue location (e.g. Las Vegas, NV):');
-    if (!location) return;
-    const capacity = prompt('Enter capacity (e.g. 15,000):');
-    if (!capacity) return;
-
-    setVenues(prev => [...prev, { name, location, capacity }]);
+  const handleOpenAddVenue = () => {
+    setVenueFormMode('create');
+    setEditingVenue(null);
+    setVenueFormError(null);
+    setIsVenueFormOpen(true);
   };
+
+  const handleOpenEditVenue = (venue: Venue) => {
+    setVenueFormMode('edit');
+    setEditingVenue(venue);
+    setVenueFormError(null);
+    setIsVenueFormOpen(true);
+  };
+
+  const handleVenueFormSubmit = async (input: VenueInput) => {
+    setVenueFormLoading(true);
+    setVenueFormError(null);
+    try {
+      if (venueFormMode === 'create') {
+        const newVenue = await createVenue(apiFetch, input);
+        setVenues(prev => [...prev, newVenue].sort((a, b) => a.name.localeCompare(b.name)));
+      } else if (editingVenue) {
+        const updated = await updateVenue(apiFetch, editingVenue.id, input);
+        setVenues(prev => prev.map(v => (v.id === updated.id ? updated : v)));
+      }
+      setIsVenueFormOpen(false);
+    } catch (err) {
+      setVenueFormError(err instanceof Error ? err.message : 'Failed to save venue.');
+    } finally {
+      setVenueFormLoading(false);
+    }
+  };
+
+  const handleOpenDeleteVenue = (venue: Venue) => {
+    setDeletingVenue(venue);
+    setVenueActionError(null);
+    setIsVenueDeleteOpen(true);
+  };
+
+  const handleConfirmDeleteVenue = async () => {
+    if (!deletingVenue) return;
+    setVenueDeleteLoading(true);
+    try {
+      await deleteVenue(apiFetch, deletingVenue.id);
+      setVenues(prev => prev.filter(v => v.id !== deletingVenue.id));
+      setIsVenueDeleteOpen(false);
+      setDeletingVenue(null);
+    } catch (err) {
+      // Keep the venue in the list (e.g. 409 because a show still uses it)
+      // and surface the server's own message.
+      setVenueActionError(err instanceof Error ? err.message : 'Failed to delete venue.');
+      setIsVenueDeleteOpen(false);
+    } finally {
+      setVenueDeleteLoading(false);
+    }
+  };
+
 
   if (authLoading) {
     return (
@@ -326,7 +395,7 @@ export const AdminDashboard: React.FC = () => {
               Managed Venues
             </h2>
             <button
-              onClick={handleAddVenue}
+              onClick={handleOpenAddVenue}
               className="font-body font-bold text-[13px] text-ink-black bg-[#FFE94D] border-2.5 border-ink-black rounded-full px-4 py-2 hover:bg-[#F3DC3C] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F] flex items-center gap-1.5"
             >
               <Plus size={14} strokeWidth={3} />
@@ -334,26 +403,69 @@ export const AdminDashboard: React.FC = () => {
             </button>
           </div>
 
-          {/* Venue Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {venues.map((venue, idx) => (
-              <div 
-                key={idx}
-                className="bg-[#F9F9FC] border-2.5 border-ink-black rounded-16 p-5 flex flex-col gap-2 shadow-sm select-none hover:shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-y-px active:shadow-sm transition-all duration-150"
+          {venueActionError && (
+            <div className="bg-red-50 border-2 border-red-500 rounded-16 p-4 mb-6 text-[#FF3B3B] font-medium text-sm flex items-center justify-between gap-4">
+              <span>{venueActionError}</span>
+              <button
+                onClick={() => setVenueActionError(null)}
+                className="shrink-0 font-bold text-[#FF3B3B] hover:underline cursor-pointer"
               >
-                <h3 className="font-body font-bold text-[15px] text-ink-black">
-                  {venue.name}
-                </h3>
-                <div className="flex items-center gap-1 text-[13px] text-ink-gray-70">
-                  <MapPin size={13} className="text-[#FF3B3B] shrink-0" strokeWidth={2.5} />
-                  <span>{venue.location}</span>
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {venuesLoading ? (
+            <div className="py-8 flex justify-center">
+              <div className="w-10 h-10 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : venuesError ? (
+            <div className="bg-red-50 border-2 border-red-500 rounded-16 p-4 text-[#FF3B3B] font-medium text-sm">
+              {venuesError}
+            </div>
+          ) : venues.length === 0 ? (
+            <div className="border-2 border-dashed border-ink-gray-30 rounded-20 py-12 text-center">
+              <p className="font-body text-ink-gray-70 font-medium">No venues yet. Add one to get started.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {venues.map((venue) => (
+                <div
+                  key={venue.id}
+                  className="bg-[#F9F9FC] border-2.5 border-ink-black rounded-16 p-5 flex flex-col gap-2 shadow-sm select-none hover:shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-y-px active:shadow-sm transition-all duration-150"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-body font-bold text-[15px] text-ink-black">
+                      {venue.name}
+                    </h3>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handleOpenEditVenue(venue)}
+                        className="w-7 h-7 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light transition-all"
+                        aria-label={`Edit ${venue.name}`}
+                      >
+                        <Edit3 size={12} strokeWidth={2.5} />
+                      </button>
+                      <button
+                        onClick={() => handleOpenDeleteVenue(venue)}
+                        className="w-7 h-7 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-[#FF3B3B]/10 transition-all"
+                        aria-label={`Delete ${venue.name}`}
+                      >
+                        <Trash2 size={12} strokeWidth={2.5} className="text-[#FF3B3B]" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 text-[13px] text-ink-gray-70">
+                    <MapPin size={13} className="text-[#FF3B3B] shrink-0" strokeWidth={2.5} />
+                    <span>{venue.address}</span>
+                  </div>
+                  <div className="font-body font-bold text-[13px] text-brand-blue mt-1">
+                    Capacity: {venue.capacity.toLocaleString()}
+                  </div>
                 </div>
-                <div className="font-body font-bold text-[13px] text-brand-blue mt-1">
-                  Capacity: {venue.capacity}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
       </main>
@@ -366,16 +478,47 @@ export const AdminDashboard: React.FC = () => {
           setDeletingRequestId(null);
         }}
         onConfirm={() => deletingRequestId && handleReject(deletingRequestId)}
-        title="Delete Request?"
+        title="Reject Request?"
         description={
           <>
             Are you sure you want to reject the request for{' '}
             <span className="font-bold text-ink-black">{deletingOrgName}</span>?
-            This will permanently delete their account from the system.
+            Their account stays active — they will remain a regular customer.
           </>
         }
-        confirmText={actioningId !== null && actionType === 'reject' ? 'Deleting...' : 'Delete & Reject'}
+        confirmText={actioningId !== null && actionType === 'reject' ? 'Rejecting...' : 'Reject Request'}
         isLoading={actioningId !== null}
+      />
+
+      {/* 6. Venue Create/Edit Modal */}
+      <VenueFormPopUp
+        isOpen={isVenueFormOpen}
+        onClose={() => setIsVenueFormOpen(false)}
+        onSubmit={handleVenueFormSubmit}
+        mode={venueFormMode}
+        initialValues={editingVenue ? { name: editingVenue.name, address: editingVenue.address, capacity: editingVenue.capacity } : undefined}
+        isLoading={venueFormLoading}
+        error={venueFormError}
+      />
+
+      {/* 7. Venue Delete Confirmation Modal */}
+      <ConfirmDeletePopUp
+        isOpen={isVenueDeleteOpen}
+        onClose={() => {
+          setIsVenueDeleteOpen(false);
+          setDeletingVenue(null);
+        }}
+        onConfirm={handleConfirmDeleteVenue}
+        title="Delete Venue?"
+        description={
+          <>
+            Are you sure you want to delete{' '}
+            <span className="font-bold text-ink-black">{deletingVenue?.name}</span>?
+            This cannot be undone.
+          </>
+        }
+        confirmText={venueDeleteLoading ? 'Deleting...' : 'Delete'}
+        isLoading={venueDeleteLoading}
       />
 
     </div>
