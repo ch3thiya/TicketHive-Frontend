@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Badge } from '../components/Badge';
 import { ArrowLeft, Calendar, Clock, MapPin, ShieldAlert, ArrowRight, Lock } from 'lucide-react';
+import { fetchAvailability, AvailabilityNotFoundError, type AvailabilityEntry } from './inventoryApi';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
+
+const AVAILABILITY_POLL_INTERVAL_MS = 3000;
 
 interface TicketCategory {
   id?: string;
   name: string;
   price: number;
   capacity: number;
-  available?: number;
 }
+
+type AvailabilityStatus = 'loading' | 'loaded' | 'not-found' | 'error';
 
 interface ShowDetails {
   id: string;
@@ -94,6 +98,79 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     }
   }, [eventId]);
 
+  const [availabilityMap, setAvailabilityMap] = useState<Record<string, AvailabilityEntry>>({});
+  const [availabilityStatus, setAvailabilityStatus] = useState<AvailabilityStatus>('loading');
+
+  // The page always displays shows[0] today (see handoff) — this follows whichever show
+  // is on screen without needing a show-switcher.
+  const activeShowId = event?.shows && event.shows.length > 0 ? event.shows[0].id : null;
+
+  useEffect(() => {
+    if (!activeShowId) {
+      return;
+    }
+
+    let cancelled = false;
+    let hasLoaded = false;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+
+    setAvailabilityMap({});
+    setAvailabilityStatus('loading');
+
+    const poll = async () => {
+      try {
+        const entries = await fetchAvailability(activeShowId);
+        if (cancelled) return;
+        hasLoaded = true;
+        const byCategory: Record<string, AvailabilityEntry> = {};
+        entries.forEach((entry) => {
+          byCategory[entry.categoryId] = entry;
+        });
+        setAvailabilityMap(byCategory);
+        setAvailabilityStatus('loaded');
+      } catch (err) {
+        if (cancelled) return;
+        // A later poll failing keeps the last known numbers on screen — only a failure
+        // before the first successful response changes what's displayed.
+        if (hasLoaded) return;
+        setAvailabilityStatus(err instanceof AvailabilityNotFoundError ? 'not-found' : 'error');
+      }
+    };
+
+    const startPolling = () => {
+      if (intervalId) return;
+      poll();
+      intervalId = setInterval(poll, AVAILABILITY_POLL_INTERVAL_MS);
+    };
+
+    const stopPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = undefined;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    if (document.visibilityState === 'visible') {
+      startPolling();
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [activeShowId]);
+
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return 'Sat, Sep 12, 2026';
     try {
@@ -128,9 +205,9 @@ export const EventDetail: React.FC<EventDetailProps> = ({
 
   // Default fallback categories if show ticket categories are not returned from backend
   const fallbackTicketCategories: TicketCategory[] = [
-    { id: 'cat-1', name: 'General Admission', price: 85, capacity: 1500, available: 1240 },
-    { id: 'cat-2', name: 'VIP Standing', price: 180, capacity: 100, available: 42 },
-    { id: 'cat-3', name: 'Premium Balcony', price: 250, capacity: 50, available: 18 },
+    { id: 'cat-1', name: 'General Admission', price: 85, capacity: 1500 },
+    { id: 'cat-2', name: 'VIP Standing', price: 180, capacity: 100 },
+    { id: 'cat-3', name: 'Premium Balcony', price: 250, capacity: 50 },
   ];
 
   if (isLoading) {
@@ -390,12 +467,18 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 Select Tickets
               </h3>
 
+              {availabilityStatus === 'error' && (
+                <p className="font-body text-xs font-medium text-ink-gray-70 -mt-3">
+                  Live availability isn't available right now — ticket counts will appear once it's back.
+                </p>
+              )}
+
               {/* Ticket Category Tier Options */}
               <div className="flex flex-col gap-3">
                 {ticketCategories.map((cat, idx) => {
                   const catId = cat.id || `cat-${idx}`;
                   const isSelected = selectedTicketId === catId;
-                  const availableCount = cat.available ?? Math.floor(cat.capacity * 0.8) ?? 100;
+                  const entry = availabilityMap[catId];
 
                   return (
                     <div
@@ -411,9 +494,15 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                         <span className="font-body font-bold text-sm text-ink-black">
                           {cat.name}
                         </span>
-                        <span className="font-body text-xs font-medium text-emerald-600 mt-0.5">
-                          {availableCount.toLocaleString()} left
-                        </span>
+                        {entry ? (
+                          <span className="font-body text-xs font-medium text-state-success mt-0.5">
+                            {entry.available.toLocaleString()} left
+                          </span>
+                        ) : (
+                          <span className="font-body text-xs font-medium text-ink-gray-70 mt-0.5">
+                            {availabilityStatus === 'loading' ? 'Checking availability…' : 'Availability unknown'}
+                          </span>
+                        )}
                       </div>
 
                       <span className="font-heading font-extrabold text-brand-blue text-base md:text-lg">
