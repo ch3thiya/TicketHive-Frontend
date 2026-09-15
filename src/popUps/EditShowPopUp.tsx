@@ -1,6 +1,8 @@
 import React from 'react';
 import { Plus } from 'lucide-react';
 import { Input } from '../components/Input';
+import { VenueSelect } from '../components/VenueSelect';
+import type { Venue } from '../common/venueApi';
 import type { TicketCategoryInput } from './AddShowPopUp';
 
 interface EditShowPopUpProps {
@@ -13,6 +15,8 @@ interface EditShowPopUpProps {
   setShowTime: (val: string) => void;
   showVenueId: string;
   setShowVenueId: (val: string) => void;
+  venues: Venue[];
+  venuesError?: string | null;
   showHighDemandThreshold: string;
   setShowHighDemandThreshold: (val: string) => void;
   showCategories: TicketCategoryInput[];
@@ -32,6 +36,8 @@ export const EditShowPopUp: React.FC<EditShowPopUpProps> = ({
   setShowTime,
   showVenueId,
   setShowVenueId,
+  venues,
+  venuesError,
   showHighDemandThreshold,
   setShowHighDemandThreshold,
   showCategories,
@@ -84,11 +90,11 @@ export const EditShowPopUp: React.FC<EditShowPopUpProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Venue ID"
-              type="text"
+            <VenueSelect
+              venues={venues}
               value={showVenueId}
-              onChange={(e) => setShowVenueId(e.target.value)}
+              onChange={setShowVenueId}
+              error={venuesError}
             />
 
             <Input

@@ -21,6 +21,7 @@ declare module 'lucide-react' {
   export const AlertCircle: Icon;
   export const CheckCircle: Icon;
   export const Edit3: Icon;
+  export const Trash2: Icon;
   export const Ban: Icon;
   export const Layers: Icon;
   export const Send: Icon;
@@ -34,6 +35,9 @@ declare module 'lucide-react' {
   export const RefreshCw: Icon;
   export const Sparkles: Icon;
   export const Search: Icon;
+  export const ArrowRight: Icon;
+  export const Lock: Icon;
+  export const ChevronDown: Icon;
 
   export const icons: Record<string, Icon>;
 }

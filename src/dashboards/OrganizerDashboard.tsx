@@ -22,6 +22,7 @@ import { EditEventPopUp } from '../popUps/EditEventPopUp';
 import { AddShowPopUp } from '../popUps/AddShowPopUp';
 import { EditShowPopUp } from '../popUps/EditShowPopUp';
 import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
+import { fetchVenues, type Venue } from '../common/venueApi';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
@@ -63,6 +64,7 @@ interface EventItem {
 }
 
 interface NewTicketCategoryForm {
+  id?: string;
   name: string;
   price: string;
   capacity: string;
@@ -108,6 +110,10 @@ export const OrganizerDashboard: React.FC = () => {
   const [eventDesc, setEventDesc] = useState('');
   const [eventBannerUrl, setEventBannerUrl] = useState('');
   const [cancellationCutoffHours, setCancellationCutoffHours] = useState('24');
+
+  // Venues (loaded once for the show pop-ups' venue picker)
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [venuesError, setVenuesError] = useState<string | null>(null);
 
   // Show Form State
   const [showDate, setShowDate] = useState('');
@@ -163,12 +169,25 @@ export const OrganizerDashboard: React.FC = () => {
     }
   }, [isAuthenticated, apiFetch]);
 
+  // Load the venue list once, for the show pop-ups' venue picker. A failure
+  // here shouldn't block the organizer from creating or editing shows.
+  const fetchVenuesList = useCallback(async () => {
+    try {
+      const data = await fetchVenues(apiFetch);
+      setVenues(data);
+      setVenuesError(null);
+    } catch (err) {
+      setVenuesError(err instanceof Error ? err.message : 'Failed to load venues.');
+    }
+  }, [apiFetch]);
+
   // Load events when organizer dashboard opens
   useEffect(() => {
     if (isAuthenticated && role === 'organizer') {
       fetchEvents();
+      fetchVenuesList();
     }
-  }, [isAuthenticated, role, fetchEvents]);
+  }, [isAuthenticated, role, fetchEvents, fetchVenuesList]);
 
   // Image Upload helper
   const handleImageChange = (
@@ -616,6 +635,7 @@ export const OrganizerDashboard: React.FC = () => {
           ? parseInt(showReminderMinutesBefore, 10)
           : null,
         categories: showCategories.map(c => ({
+          ...(c.id ? { id: c.id } : {}),
           name: c.name.trim(),
           price: parseFloat(c.price) || 0,
           capacity: parseInt(c.capacity, 10) || 0
@@ -764,6 +784,7 @@ export const OrganizerDashboard: React.FC = () => {
     if (show.ticketCategories && show.ticketCategories.length > 0) {
       setShowCategories(
         show.ticketCategories.map((c) => ({
+          id: c.id,
           name: c.name || '',
           price: c.price !== undefined && c.price !== null ? c.price.toString() : '',
           capacity: c.capacity !== undefined && c.capacity !== null ? c.capacity.toString() : ''
@@ -1400,6 +1421,8 @@ export const OrganizerDashboard: React.FC = () => {
         setShowTime={setShowTime}
         showVenueId={showVenueId}
         setShowVenueId={setShowVenueId}
+        venues={venues}
+        venuesError={venuesError}
         showHighDemandThreshold={showHighDemandThreshold}
         setShowHighDemandThreshold={setShowHighDemandThreshold}
         showCategories={showCategories}
@@ -1420,6 +1443,8 @@ export const OrganizerDashboard: React.FC = () => {
         setShowTime={setShowTime}
         showVenueId={showVenueId}
         setShowVenueId={setShowVenueId}
+        venues={venues}
+        venuesError={venuesError}
         showHighDemandThreshold={showHighDemandThreshold}
         setShowHighDemandThreshold={setShowHighDemandThreshold}
         showCategories={showCategories}
