@@ -322,6 +322,18 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const isSelectedCategorySoldOut = activeSelectedId !== null && availabilityMap[activeSelectedId]?.available === 0;
   const isBuyDisabled = allCategoriesSoldOut || isSelectedCategorySoldOut;
 
+  const totalCapacity = ticketCategories.reduce((sum, cat) => sum + (cat.capacity || 0), 0);
+  const totalAvailable = ticketCategories.reduce((sum, cat, idx) => {
+    const entry = availabilityMap[getCategoryId(cat, idx)];
+    return sum + (entry ? entry.available : (cat.capacity || 0));
+  }, 0);
+  const totalHeldOrSold = Math.max(0, totalCapacity - totalAvailable);
+
+  const isQueueActive = Boolean(
+    activeShow?.highDemand ||
+    (activeShow?.highDemandThreshold && activeShow.highDemandThreshold > 0 && totalHeldOrSold >= activeShow.highDemandThreshold)
+  );
+
   const eventVenue = displayEvent.venue || activeShow?.venueName || 'Madison Square Garden, NYC';
   const eventDate = displayEvent.eventDate || activeShow?.showDate || '2026-09-12';
   const eventTime = displayEvent.eventTime || activeShow?.showTime || '19:00';
@@ -559,8 +571,8 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                     return;
                   }
 
-                  // If high demand and no admission token yet, trigger waiting room popup
-                  if ((activeShow?.highDemandThreshold || activeShow?.highDemand) && !admissionToken) {
+                  // If queue mode is active and customer does not have an admission token yet, trigger waiting room popup
+                  if (isQueueActive && !admissionToken) {
                     setIsWaitingRoomOpen(true);
                     return;
                   }
