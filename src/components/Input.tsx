@@ -266,7 +266,7 @@ export const Input: React.FC<InputProps> = ({
                     const d = String(today.getDate()).padStart(2, '0');
                     const formatted = `${today.getFullYear()}-${m}-${d}`;
                     if (inputProps.onChange) {
-                      inputProps.onChange({ target: { value: formatted } } as any);
+                      inputProps.onChange({ target: { value: formatted } } as React.ChangeEvent<HTMLInputElement>);
                     }
                     setIsPickerOpen(false);
                   }}

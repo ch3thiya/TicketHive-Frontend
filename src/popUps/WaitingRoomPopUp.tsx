@@ -35,14 +35,12 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
     if (!isOpen || !showId) return;
 
     let cancelled = false;
-    let intervalId: ReturnType<typeof setInterval> | undefined;
 
     const joinAndPoll = async () => {
       setIsJoining(true);
       setErrorMsg(null);
 
       try {
-        // First try to join or get existing queue status
         const joinRes = await apiFetch(`${INVENTORY_API_URL}/api/inventory/shows/${showId}/waiting-room/join`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -99,12 +97,11 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
 
     joinAndPoll();
 
-    // Poll every 3 seconds for position updates
-    intervalId = setInterval(pollStatus, 3000);
+    const intervalId = setInterval(pollStatus, 3000);
 
     return () => {
       cancelled = true;
-      if (intervalId) clearInterval(intervalId);
+      clearInterval(intervalId);
     };
   }, [isOpen, showId, apiFetch, onAdmitted]);
 
@@ -115,10 +112,10 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-[#0A0A0F]/60 backdrop-blur-sm transition-all duration-300">
       
-      {/* PopUp Card matching uploaded UI */}
+      {/* PopUp Card */}
       <div className="bg-white border-2 border-black/10 shadow-[0_20px_50px_rgba(0,0,0,0.12)] rounded-[32px] w-full max-w-[420px] p-8 flex flex-col items-center relative z-10 animate-in fade-in zoom-in duration-200">
         
-        {/* Close Button if provided */}
+        {/* Close Button */}
         {onClose && (
           <button
             onClick={onClose}
@@ -132,13 +129,8 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
         {/* Top Waiting Clock / Progress Vector Graphic */}
         <div className="relative w-24 h-24 mb-4 flex items-center justify-center">
           <svg className="w-24 h-24" viewBox="0 0 100 100" fill="none">
-            {/* Top-left light blue pie slice segment */}
             <path d="M 50 50 L 50 10 A 40 40 0 0 0 20 70 Z" fill="#E2E6FF" />
-            
-            {/* Outer Electric Blue Ring */}
             <circle cx="50" cy="50" r="40" stroke="#003BFF" strokeWidth="7" fill="none" />
-            
-            {/* Clock Hands / Slice Vectors */}
             <path d="M 50 50 L 50 10" stroke="#003BFF" strokeWidth="7" strokeLinecap="round" />
             <path d="M 50 50 L 20 70" stroke="#003BFF" strokeWidth="7" strokeLinecap="round" />
           </svg>

@@ -28,6 +28,7 @@ interface ShowDetails {
   venueName?: string | null;
   onSaleAt?: string | null;
   highDemandThreshold?: number | null;
+  highDemand?: boolean | null;
   reminderMinutesBefore?: number | null;
   status: string;
   createdAt: string;
@@ -559,7 +560,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                   }
 
                   // If high demand and no admission token yet, trigger waiting room popup
-                  if ((activeShow?.highDemandThreshold || (activeShow as any)?.highDemand) && !admissionToken) {
+                  if ((activeShow?.highDemandThreshold || activeShow?.highDemand) && !admissionToken) {
                     setIsWaitingRoomOpen(true);
                     return;
                   }

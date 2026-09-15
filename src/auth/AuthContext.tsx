@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { useAuth as useOidcAuth, AuthProvider as OidcAuthProvider } from 'react-oidc-context';
 import { WebStorageStateStore } from 'oidc-client-ts';
