@@ -20,6 +20,10 @@ export default defineConfig({
         target: process.env.VITE_IDENTITY_API_URL || 'http://localhost:5051',
         changeOrigin: true,
       },
+      '/api/inventory': {
+        target: process.env.VITE_INVENTORY_API_URL || 'http://localhost:5219',
+        changeOrigin: true,
+      },
     },
   },
 })
