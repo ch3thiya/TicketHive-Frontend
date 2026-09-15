@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Badge } from '../components/Badge';
-import { ArrowLeft, Calendar, Clock, MapPin, ShieldAlert, ArrowRight, Lock, Minus, Plus } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, ShieldAlert, ArrowRight, Lock, Minus, Plus, AlertCircle } from 'lucide-react';
 import { fetchAvailability, AvailabilityNotFoundError, type AvailabilityEntry } from './inventoryApi';
-import { createHold, type Hold } from './holdsApi';
+import { createHold, HoldApiError, type Hold } from './holdsApi';
 import { useAuth } from '../auth/AuthContext';
 
 const CATALOG_API_URL =
@@ -386,6 +386,28 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Each hold failure status means something different to the customer — a 409/422
+  // carry the server's own explanation (ProblemDetails `detail`), the rest get plain
+  // English for a status the server never explains in words.
+  const holdErrorMessage = (err: unknown): string => {
+    if (err instanceof HoldApiError) {
+      switch (err.status) {
+        case 409:
+        case 422:
+          return err.message;
+        case 403:
+          return "This is a high-demand show and needs an admission token to hold tickets — the queue for that isn't available yet.";
+        case 429:
+          return "You're trying a bit too fast — wait a moment and try again.";
+        case 400:
+          return 'Something went wrong on our side, not yours — please try again.';
+        default:
+          return err.message || 'Unable to hold tickets right now. Please try again.';
+      }
+    }
+    return 'Unable to connect. Please check your connection and try again.';
+  };
+
   const handleBuyNow = async () => {
     // Holds require authentication, unlike availability — send a signed-out
     // customer to sign in before firing a request that would just 401.
@@ -406,7 +428,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
       });
       setHold(created);
     } catch (err) {
-      setHoldError(err instanceof Error ? err.message : 'Unable to hold tickets right now.');
+      setHoldError(holdErrorMessage(err));
     } finally {
       setIsHolding(false);
     }
@@ -640,7 +662,11 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                   )}
 
                   {holdError && (
-                    <div className="border-2 border-state-error bg-red-50 rounded-xl p-3 text-center">
+                    <div
+                      role="alert"
+                      className="border-2 border-state-error bg-red-50 rounded-xl p-3 flex items-center gap-2"
+                    >
+                      <AlertCircle size={16} className="text-state-error shrink-0" />
                       <p className="font-body text-xs font-bold text-state-error">
                         {holdError}
                       </p>
