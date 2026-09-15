@@ -1,17 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Badge } from '../components/Badge';
 import { ArrowLeft, Calendar, Clock, MapPin, ShieldAlert, ArrowRight, Lock } from 'lucide-react';
+import { fetchAvailability, AvailabilityNotFoundError, type AvailabilityEntry } from './inventoryApi';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
+
+const AVAILABILITY_POLL_INTERVAL_MS = 3000;
 
 interface TicketCategory {
   id?: string;
   name: string;
   price: number;
   capacity: number;
-  available?: number;
 }
+
+type AvailabilityStatus = 'loading' | 'loaded' | 'not-found' | 'error';
 
 interface ShowDetails {
   id: string;
@@ -59,7 +63,9 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const [event, setEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [selectedTicketId, setSelectedTicketId] = useState<string>('cat-1');
+  // null until the customer explicitly picks a row — the default (first available
+  // category) is derived below, once real category ids are known.
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchEventDetail = async () => {
@@ -93,6 +99,79 @@ export const EventDetail: React.FC<EventDetailProps> = ({
       fetchEventDetail();
     }
   }, [eventId]);
+
+  const [availabilityMap, setAvailabilityMap] = useState<Record<string, AvailabilityEntry>>({});
+  const [availabilityStatus, setAvailabilityStatus] = useState<AvailabilityStatus>('loading');
+
+  // The page always displays shows[0] today (see handoff) — this follows whichever show
+  // is on screen without needing a show-switcher.
+  const activeShowId = event?.shows && event.shows.length > 0 ? event.shows[0].id : null;
+
+  useEffect(() => {
+    if (!activeShowId) {
+      return;
+    }
+
+    let cancelled = false;
+    let hasLoaded = false;
+    let intervalId: ReturnType<typeof setInterval> | undefined;
+
+    setAvailabilityMap({});
+    setAvailabilityStatus('loading');
+
+    const poll = async () => {
+      try {
+        const entries = await fetchAvailability(activeShowId);
+        if (cancelled) return;
+        hasLoaded = true;
+        const byCategory: Record<string, AvailabilityEntry> = {};
+        entries.forEach((entry) => {
+          byCategory[entry.categoryId] = entry;
+        });
+        setAvailabilityMap(byCategory);
+        setAvailabilityStatus('loaded');
+      } catch (err) {
+        if (cancelled) return;
+        // A later poll failing keeps the last known numbers on screen — only a failure
+        // before the first successful response changes what's displayed.
+        if (hasLoaded) return;
+        setAvailabilityStatus(err instanceof AvailabilityNotFoundError ? 'not-found' : 'error');
+      }
+    };
+
+    const startPolling = () => {
+      if (intervalId) return;
+      poll();
+      intervalId = setInterval(poll, AVAILABILITY_POLL_INTERVAL_MS);
+    };
+
+    const stopPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = undefined;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    if (document.visibilityState === 'visible') {
+      startPolling();
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [activeShowId]);
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return 'Sat, Sep 12, 2026';
@@ -128,9 +207,9 @@ export const EventDetail: React.FC<EventDetailProps> = ({
 
   // Default fallback categories if show ticket categories are not returned from backend
   const fallbackTicketCategories: TicketCategory[] = [
-    { id: 'cat-1', name: 'General Admission', price: 85, capacity: 1500, available: 1240 },
-    { id: 'cat-2', name: 'VIP Standing', price: 180, capacity: 100, available: 42 },
-    { id: 'cat-3', name: 'Premium Balcony', price: 250, capacity: 50, available: 18 },
+    { id: 'cat-1', name: 'General Admission', price: 85, capacity: 1500 },
+    { id: 'cat-2', name: 'VIP Standing', price: 180, capacity: 100 },
+    { id: 'cat-3', name: 'Premium Balcony', price: 250, capacity: 50 },
   ];
 
   if (isLoading) {
@@ -216,6 +295,28 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     activeShow && activeShow.ticketCategories && activeShow.ticketCategories.length > 0
       ? activeShow.ticketCategories
       : fallbackTicketCategories;
+
+  const getCategoryId = (cat: TicketCategory, idx: number) => cat.id || `cat-${idx}`;
+  const isCategorySoldOut = (cat: TicketCategory, idx: number) =>
+    availabilityMap[getCategoryId(cat, idx)]?.available === 0;
+  const allCategoriesSoldOut = ticketCategories.every((cat, idx) => isCategorySoldOut(cat, idx));
+
+  // The default selection is the first non-sold-out category (falling back to the
+  // first category if every one is sold out) — never a hardcoded id, since real
+  // categories use GUIDs. A customer's explicit click always wins once it's made
+  // against a category that still exists.
+  const firstAvailableCategory = ticketCategories.find((cat, idx) => !isCategorySoldOut(cat, idx));
+  const defaultCategoryId = firstAvailableCategory
+    ? getCategoryId(firstAvailableCategory, ticketCategories.indexOf(firstAvailableCategory))
+    : ticketCategories.length > 0
+      ? getCategoryId(ticketCategories[0], 0)
+      : null;
+  const hasExplicitSelection =
+    selectedTicketId !== null && ticketCategories.some((cat, idx) => getCategoryId(cat, idx) === selectedTicketId);
+  const activeSelectedId = hasExplicitSelection ? selectedTicketId : defaultCategoryId;
+
+  const isSelectedCategorySoldOut = activeSelectedId !== null && availabilityMap[activeSelectedId]?.available === 0;
+  const isBuyDisabled = allCategoriesSoldOut || isSelectedCategorySoldOut;
 
   const eventVenue = displayEvent.venue || activeShow?.venueName || 'Madison Square Garden, NYC';
   const eventDate = displayEvent.eventDate || activeShow?.showDate || '2026-09-12';
@@ -390,33 +491,55 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 Select Tickets
               </h3>
 
+              {availabilityStatus === 'error' && (
+                <p className="font-body text-xs font-medium text-ink-gray-70 -mt-3">
+                  Live availability isn't available right now — ticket counts will appear once it's back.
+                </p>
+              )}
+
               {/* Ticket Category Tier Options */}
               <div className="flex flex-col gap-3">
                 {ticketCategories.map((cat, idx) => {
-                  const catId = cat.id || `cat-${idx}`;
-                  const isSelected = selectedTicketId === catId;
-                  const availableCount = cat.available ?? Math.floor(cat.capacity * 0.8) ?? 100;
+                  const catId = getCategoryId(cat, idx);
+                  const isSelected = activeSelectedId === catId;
+                  const entry = availabilityMap[catId];
+                  const isSoldOut = isCategorySoldOut(cat, idx);
 
                   return (
                     <div
                       key={catId}
-                      onClick={() => setSelectedTicketId(catId)}
-                      className={`border-2 border-ink-black rounded-xl p-4 flex items-center justify-between cursor-pointer transition-all duration-150 ${
-                        isSelected
-                          ? 'bg-white border-3 border-ink-black shadow-[3px_3px_0px_0px_#0A0A0F] ring-2 ring-brand-blue'
-                          : 'bg-brand-white hover:border-brand-blue hover:bg-[#F9F9FF]'
+                      onClick={() => {
+                        if (!isSoldOut) setSelectedTicketId(catId);
+                      }}
+                      aria-disabled={isSoldOut}
+                      className={`border-2 border-ink-black rounded-xl p-4 flex items-center justify-between transition-all duration-150 ${
+                        isSoldOut
+                          ? 'bg-ink-gray-30 cursor-not-allowed'
+                          : isSelected
+                            ? 'cursor-pointer bg-white border-3 border-ink-black shadow-[3px_3px_0px_0px_#0A0A0F] ring-2 ring-brand-blue'
+                            : 'cursor-pointer bg-brand-white hover:border-brand-blue hover:bg-[#F9F9FF]'
                       }`}
                     >
                       <div className="flex flex-col">
-                        <span className="font-body font-bold text-sm text-ink-black">
+                        <span className={`font-body font-bold text-sm ${isSoldOut ? 'text-ink-gray-70' : 'text-ink-black'}`}>
                           {cat.name}
                         </span>
-                        <span className="font-body text-xs font-medium text-emerald-600 mt-0.5">
-                          {availableCount.toLocaleString()} left
-                        </span>
+                        {isSoldOut ? (
+                          <span className="font-body text-xs font-bold text-state-error mt-0.5">
+                            Sold out
+                          </span>
+                        ) : entry ? (
+                          <span className="font-body text-xs font-medium text-state-success mt-0.5">
+                            {entry.available.toLocaleString()} left
+                          </span>
+                        ) : (
+                          <span className="font-body text-xs font-medium text-ink-gray-70 mt-0.5">
+                            {availabilityStatus === 'loading' ? 'Checking availability…' : 'Availability unknown'}
+                          </span>
+                        )}
                       </div>
 
-                      <span className="font-heading font-extrabold text-brand-blue text-base md:text-lg">
+                      <span className={`font-heading font-extrabold text-base md:text-lg ${isSoldOut ? 'text-ink-gray-70' : 'text-brand-blue'}`}>
                         ${cat.price.toFixed(0)}
                       </span>
                     </div>
@@ -427,10 +550,11 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               {/* Buy Now Primary Button */}
               <button
                 onClick={() => {
-                  const selectedCat = ticketCategories.find(c => (c.id || `cat-${ticketCategories.indexOf(c)}`) === selectedTicketId) || ticketCategories[0];
+                  const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
                   alert(`Proceeding to checkout for ${selectedCat.name} ($${selectedCat.price})`);
                 }}
-                className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 active:shadow-[1px_1px_0px_0px_#0A0A0F] transition-all cursor-pointer flex items-center justify-center gap-2"
+                disabled={isBuyDisabled}
+                className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 active:shadow-[1px_1px_0px_0px_#0A0A0F] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:bg-ink-gray-30 disabled:text-ink-gray-70 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-x-0 disabled:hover:translate-y-0"
               >
                 <span>Buy Now</span>
                 <ArrowRight size={18} strokeWidth={2.5} />
