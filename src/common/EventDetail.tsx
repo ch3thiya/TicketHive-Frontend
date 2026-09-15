@@ -294,6 +294,13 @@ export const EventDetail: React.FC<EventDetailProps> = ({
       ? activeShow.ticketCategories
       : fallbackTicketCategories;
 
+  const getCategoryId = (cat: TicketCategory, idx: number) => cat.id || `cat-${idx}`;
+  const isCategorySoldOut = (cat: TicketCategory, idx: number) =>
+    availabilityMap[getCategoryId(cat, idx)]?.available === 0;
+  const allCategoriesSoldOut = ticketCategories.every((cat, idx) => isCategorySoldOut(cat, idx));
+  const isSelectedCategorySoldOut = availabilityMap[selectedTicketId]?.available === 0;
+  const isBuyDisabled = allCategoriesSoldOut || isSelectedCategorySoldOut;
+
   const eventVenue = displayEvent.venue || activeShow?.venueName || 'Madison Square Garden, NYC';
   const eventDate = displayEvent.eventDate || activeShow?.showDate || '2026-09-12';
   const eventTime = displayEvent.eventTime || activeShow?.showTime || '19:00';
@@ -476,25 +483,35 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               {/* Ticket Category Tier Options */}
               <div className="flex flex-col gap-3">
                 {ticketCategories.map((cat, idx) => {
-                  const catId = cat.id || `cat-${idx}`;
+                  const catId = getCategoryId(cat, idx);
                   const isSelected = selectedTicketId === catId;
                   const entry = availabilityMap[catId];
+                  const isSoldOut = isCategorySoldOut(cat, idx);
 
                   return (
                     <div
                       key={catId}
-                      onClick={() => setSelectedTicketId(catId)}
-                      className={`border-2 border-ink-black rounded-xl p-4 flex items-center justify-between cursor-pointer transition-all duration-150 ${
-                        isSelected
-                          ? 'bg-white border-3 border-ink-black shadow-[3px_3px_0px_0px_#0A0A0F] ring-2 ring-brand-blue'
-                          : 'bg-brand-white hover:border-brand-blue hover:bg-[#F9F9FF]'
+                      onClick={() => {
+                        if (!isSoldOut) setSelectedTicketId(catId);
+                      }}
+                      aria-disabled={isSoldOut}
+                      className={`border-2 border-ink-black rounded-xl p-4 flex items-center justify-between transition-all duration-150 ${
+                        isSoldOut
+                          ? 'bg-ink-gray-30 cursor-not-allowed'
+                          : isSelected
+                            ? 'cursor-pointer bg-white border-3 border-ink-black shadow-[3px_3px_0px_0px_#0A0A0F] ring-2 ring-brand-blue'
+                            : 'cursor-pointer bg-brand-white hover:border-brand-blue hover:bg-[#F9F9FF]'
                       }`}
                     >
                       <div className="flex flex-col">
-                        <span className="font-body font-bold text-sm text-ink-black">
+                        <span className={`font-body font-bold text-sm ${isSoldOut ? 'text-ink-gray-70' : 'text-ink-black'}`}>
                           {cat.name}
                         </span>
-                        {entry ? (
+                        {isSoldOut ? (
+                          <span className="font-body text-xs font-bold text-state-error mt-0.5">
+                            Sold out
+                          </span>
+                        ) : entry ? (
                           <span className="font-body text-xs font-medium text-state-success mt-0.5">
                             {entry.available.toLocaleString()} left
                           </span>
@@ -505,7 +522,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                         )}
                       </div>
 
-                      <span className="font-heading font-extrabold text-brand-blue text-base md:text-lg">
+                      <span className={`font-heading font-extrabold text-base md:text-lg ${isSoldOut ? 'text-ink-gray-70' : 'text-brand-blue'}`}>
                         ${cat.price.toFixed(0)}
                       </span>
                     </div>
@@ -516,10 +533,11 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               {/* Buy Now Primary Button */}
               <button
                 onClick={() => {
-                  const selectedCat = ticketCategories.find(c => (c.id || `cat-${ticketCategories.indexOf(c)}`) === selectedTicketId) || ticketCategories[0];
+                  const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === selectedTicketId) || ticketCategories[0];
                   alert(`Proceeding to checkout for ${selectedCat.name} ($${selectedCat.price})`);
                 }}
-                className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 active:shadow-[1px_1px_0px_0px_#0A0A0F] transition-all cursor-pointer flex items-center justify-center gap-2"
+                disabled={isBuyDisabled}
+                className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 active:shadow-[1px_1px_0px_0px_#0A0A0F] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:bg-ink-gray-30 disabled:text-ink-gray-70 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-x-0 disabled:hover:translate-y-0"
               >
                 <span>Buy Now</span>
                 <ArrowRight size={18} strokeWidth={2.5} />
