@@ -34,6 +34,12 @@ function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+// The inventory service wraps categories in an envelope with the show id —
+// this mirrors that real response shape rather than a bare array.
+function availabilityResponse(categories: AvailabilityEntry[], status = 200) {
+  return jsonResponse({ showId: 'show-1', categories }, status);
+}
+
 function setVisibility(state: 'visible' | 'hidden') {
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
 }
@@ -73,7 +79,7 @@ afterEach(() => {
 
 describe('EventDetail live availability', () => {
   it('shows a neutral placeholder before the first response, then the real API number — never a capacity-derived one', async () => {
-    stubFetch([jsonResponse(AVAILABILITY)]);
+    stubFetch([availabilityResponse(AVAILABILITY)]);
 
     render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
 
@@ -116,7 +122,7 @@ describe('EventDetail live availability', () => {
       { categoryId: 'cat-a', capacity: 1500, available: 0, unitPrice: 85, currency: 'LKR' },
       { categoryId: 'cat-b', capacity: 100, available: 12, unitPrice: 180, currency: 'LKR' }
     ];
-    stubFetch([jsonResponse(soldOut)]);
+    stubFetch([availabilityResponse(soldOut)]);
 
     render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
 
@@ -138,7 +144,7 @@ describe('EventDetail live availability', () => {
       { categoryId: 'cat-a', capacity: 1500, available: 0, unitPrice: 85, currency: 'LKR' },
       { categoryId: 'cat-b', capacity: 100, available: 0, unitPrice: 180, currency: 'LKR' }
     ];
-    stubFetch([jsonResponse(allSoldOut)]);
+    stubFetch([availabilityResponse(allSoldOut)]);
 
     render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
 
@@ -151,7 +157,7 @@ describe('EventDetail live availability', () => {
       { categoryId: 'cat-a', capacity: 1500, available: 0, unitPrice: 85, currency: 'LKR' },
       { categoryId: 'cat-b', capacity: 100, available: 12, unitPrice: 180, currency: 'LKR' }
     ];
-    stubFetch([jsonResponse(firstSoldOut)]);
+    stubFetch([availabilityResponse(firstSoldOut)]);
 
     render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
 
@@ -170,7 +176,7 @@ describe('EventDetail live availability', () => {
 
   it('keeps the last known numbers on screen and keeps polling when a later poll fails', async () => {
     vi.useFakeTimers();
-    const fetchMock = stubFetch([jsonResponse(AVAILABILITY), new Error('dropped request')]);
+    const fetchMock = stubFetch([availabilityResponse(AVAILABILITY), new Error('dropped request')]);
 
     render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
 
@@ -192,7 +198,7 @@ describe('EventDetail live availability', () => {
 
   it('refreshes roughly every 3 seconds', async () => {
     vi.useFakeTimers();
-    const fetchMock = stubFetch([jsonResponse(AVAILABILITY)]);
+    const fetchMock = stubFetch([availabilityResponse(AVAILABILITY)]);
 
     render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
 
@@ -216,7 +222,7 @@ describe('EventDetail live availability', () => {
 
   it('stops polling while the tab is hidden and resumes when it is shown again', async () => {
     vi.useFakeTimers();
-    const fetchMock = stubFetch([jsonResponse(AVAILABILITY)]);
+    const fetchMock = stubFetch([availabilityResponse(AVAILABILITY)]);
 
     render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
 
@@ -243,7 +249,7 @@ describe('EventDetail live availability', () => {
 
   it('stops polling on unmount', async () => {
     vi.useFakeTimers();
-    const fetchMock = stubFetch([jsonResponse(AVAILABILITY)]);
+    const fetchMock = stubFetch([availabilityResponse(AVAILABILITY)]);
 
     const { unmount } = render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
 
