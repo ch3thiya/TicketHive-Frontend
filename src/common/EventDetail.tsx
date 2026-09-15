@@ -4,6 +4,7 @@ import { ArrowLeft, Calendar, Clock, MapPin, ShieldAlert, ArrowRight, Lock } fro
 import { fetchAvailability, AvailabilityNotFoundError, type AvailabilityEntry } from './inventoryApi';
 import { useAuth } from '../auth/AuthContext';
 import { WaitingRoomPopUp } from '../popUps/WaitingRoomPopUp';
+import { HoldConfirmationPopUp } from '../popUps/HoldConfirmationPopUp';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
@@ -70,6 +71,14 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [isWaitingRoomOpen, setIsWaitingRoomOpen] = useState(false);
   const [admissionToken, setAdmissionToken] = useState<string | null>(null);
+  const [isCreatingHold, setIsCreatingHold] = useState(false);
+  const [activeHold, setActiveHold] = useState<{
+    holdId: string;
+    categoryName: string;
+    quantity: number;
+    totalPrice: number;
+    expiresAt: string;
+  } | null>(null);
 
   useEffect(() => {
     const fetchEventDetail = async () => {
@@ -322,6 +331,18 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const isSelectedCategorySoldOut = activeSelectedId !== null && availabilityMap[activeSelectedId]?.available === 0;
   const isBuyDisabled = allCategoriesSoldOut || isSelectedCategorySoldOut;
 
+  const totalCapacity = ticketCategories.reduce((sum, cat) => sum + (cat.capacity || 0), 0);
+  const totalAvailable = ticketCategories.reduce((sum, cat, idx) => {
+    const entry = availabilityMap[getCategoryId(cat, idx)];
+    return sum + (entry ? entry.available : (cat.capacity || 0));
+  }, 0);
+  const totalHeldOrSold = Math.max(0, totalCapacity - totalAvailable);
+
+  const isQueueActive = Boolean(
+    activeShow?.highDemand ||
+    (activeShow?.highDemandThreshold && activeShow.highDemandThreshold > 0 && totalHeldOrSold >= activeShow.highDemandThreshold)
+  );
+
   const eventVenue = displayEvent.venue || activeShow?.venueName || 'Madison Square Garden, NYC';
   const eventDate = displayEvent.eventDate || activeShow?.showDate || '2026-09-12';
   const eventTime = displayEvent.eventTime || activeShow?.showTime || '19:00';
@@ -553,26 +574,79 @@ export const EventDetail: React.FC<EventDetailProps> = ({
 
               {/* Buy Now Primary Button */}
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (!isAuthenticated) {
                     login();
                     return;
                   }
 
-                  // If high demand and no admission token yet, trigger waiting room popup
-                  if ((activeShow?.highDemandThreshold || activeShow?.highDemand) && !admissionToken) {
+                  // If queue mode is active and customer does not have an admission token yet, trigger waiting room popup
+                  if (isQueueActive && !admissionToken) {
                     setIsWaitingRoomOpen(true);
                     return;
                   }
 
                   const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
-                  alert(`Proceeding to checkout for ${selectedCat.name} ($${selectedCat.price})`);
+                  const catId = getCategoryId(selectedCat, 0);
+
+                  setIsCreatingHold(true);
+
+                  try {
+                    const headers: Record<string, string> = {
+                      'Content-Type': 'application/json',
+                      'Idempotency-Key': `idemp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                    };
+                    if (admissionToken) {
+                      headers['Admission-Token'] = admissionToken;
+                    }
+
+                    const res = await apiFetch(`/api/inventory/holds`, {
+                      method: 'POST',
+                      headers,
+                      body: JSON.stringify({
+                        showId: activeShowId,
+                        items: [{ categoryId: catId, quantity: 1 }],
+                      }),
+                    });
+
+                    if (res.status === 201 || res.status === 200) {
+                      const data = await res.json();
+                      setActiveHold({
+                        holdId: data.holdId || data.id,
+                        categoryName: selectedCat.name,
+                        quantity: 1,
+                        totalPrice: selectedCat.price,
+                        expiresAt: data.expiresAt || new Date(Date.now() + 600000).toISOString(),
+                      });
+                    } else {
+                      const err = await res.json().catch(() => null);
+                      if (res.status === 403) {
+                        setIsWaitingRoomOpen(true);
+                      } else {
+                        alert(err?.detail || err?.title || 'Unable to place hold on this ticket.');
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Hold error:', err);
+                    alert('Network error while placing ticket hold.');
+                  } finally {
+                    setIsCreatingHold(false);
+                  }
                 }}
-                disabled={isBuyDisabled}
+                disabled={isBuyDisabled || isCreatingHold}
                 className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 active:shadow-[1px_1px_0px_0px_#0A0A0F] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:bg-ink-gray-30 disabled:text-ink-gray-70 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-x-0 disabled:hover:translate-y-0"
               >
-                <span>Buy Now</span>
-                <ArrowRight size={18} strokeWidth={2.5} />
+                {isCreatingHold ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    <span>Holding Ticket…</span>
+                  </div>
+                ) : (
+                  <>
+                    <span>Buy Now</span>
+                    <ArrowRight size={18} strokeWidth={2.5} />
+                  </>
+                )}
               </button>
 
               {/* Secure Checkout Subtext */}
@@ -598,6 +672,23 @@ export const EventDetail: React.FC<EventDetailProps> = ({
             setIsWaitingRoomOpen(false);
           }}
           onClose={() => setIsWaitingRoomOpen(false)}
+        />
+      )}
+
+      {/* Hold Confirmation Popup */}
+      {activeHold && (
+        <HoldConfirmationPopUp
+          isOpen={Boolean(activeHold)}
+          holdId={activeHold.holdId}
+          categoryName={activeHold.categoryName}
+          quantity={activeHold.quantity}
+          totalPrice={activeHold.totalPrice}
+          expiresAt={activeHold.expiresAt}
+          onProceedToPayment={() => {
+            alert(`Proceeding to payment gateway for hold '${activeHold.holdId}'`);
+            setActiveHold(null);
+          }}
+          onClose={() => setActiveHold(null)}
         />
       )}
     </div>
