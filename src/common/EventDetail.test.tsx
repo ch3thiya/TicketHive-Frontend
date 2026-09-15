@@ -1,7 +1,35 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
-import { EventDetail } from './EventDetail';
+import userEvent from '@testing-library/user-event';
 import type { AvailabilityEntry } from './inventoryApi';
+import type { Hold } from './holdsApi';
+
+// EventDetail now calls useAuth() for the holds flow — mock the module rather than
+// wrapping every render in a real AuthProvider, following the pattern already used in
+// src/dashboards/OrganizerDashboard.test.tsx. authState is mutable per test so both a
+// signed-in and a signed-out customer can be exercised.
+const { mockApiFetch, mockLogin, authState } = vi.hoisted(() => ({
+  mockApiFetch: vi.fn(),
+  mockLogin: vi.fn(),
+  authState: { isAuthenticated: true }
+}));
+
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    isAuthenticated: authState.isAuthenticated,
+    isLoading: false,
+    accessToken: 'test-token',
+    email: 'customer@example.com',
+    fullName: 'Test Customer',
+    role: 'customer',
+    approvalStatus: 'approved',
+    login: mockLogin,
+    logout: vi.fn(),
+    apiFetch: mockApiFetch
+  })
+}));
+
+import { EventDetail } from './EventDetail';
 
 const EVENT = {
   id: 'evt-1',
@@ -71,11 +99,36 @@ const AVAILABILITY: AvailabilityEntry[] = [
   { categoryId: 'cat-b', capacity: 100, available: 12, unitPrice: 180, currency: 'LKR' }
 ];
 
+beforeEach(() => {
+  authState.isAuthenticated = true;
+  mockApiFetch.mockReset();
+  mockLogin.mockReset();
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
+
+function holdResponse(overrides: Partial<Hold> = {}, status = 201) {
+  const body: Hold = {
+    holdId: 'hold-1',
+    showId: 'show-1',
+    status: 'Active',
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    items: [{ categoryId: 'cat-a', quantity: 1, unitPrice: 85, currency: 'LKR' }],
+    ...overrides
+  };
+  return jsonResponse(body, status);
+}
+
+// Selects a category by name once its card has rendered, waiting for the availability
+// fetch that lands after mount.
+async function selectCategory(user: ReturnType<typeof userEvent.setup>, name: string) {
+  const label = await screen.findByText(name);
+  await user.click(label.closest('[aria-disabled]') as HTMLElement);
+}
 
 describe('EventDetail live availability', () => {
   it('shows a neutral placeholder before the first response, then the real API number — never a capacity-derived one', async () => {
@@ -266,5 +319,282 @@ describe('EventDetail live availability', () => {
       await vi.advanceTimersByTimeAsync(9000);
     });
     expect(countAvailabilityCalls()).toBe(callsBeforeUnmount);
+  });
+});
+
+describe('EventDetail quantity selection', () => {
+  it("clamps the quantity between 1 and the selected category's available count", async () => {
+    const user = userEvent.setup();
+    stubFetch([availabilityResponse(AVAILABILITY)]);
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+
+    await selectCategory(user, 'VIP Standing'); // available: 12
+
+    const decrement = screen.getByRole('button', { name: /decrease quantity/i });
+    const increment = screen.getByRole('button', { name: /increase quantity/i });
+    expect(decrement).toBeDisabled();
+
+    for (let i = 0; i < 11; i += 1) {
+      await user.click(increment);
+    }
+    expect(screen.getByText('12')).toBeInTheDocument();
+    expect(increment).toBeDisabled();
+
+    // One more click past the cap must not go to 13.
+    await user.click(increment);
+    expect(screen.getByText('12')).toBeInTheDocument();
+
+    await user.click(decrement);
+    expect(screen.getByText('11')).toBeInTheDocument();
+    expect(increment).not.toBeDisabled();
+  });
+
+  it('resets the quantity to 1 when the selected category changes', async () => {
+    const user = userEvent.setup();
+    stubFetch([availabilityResponse(AVAILABILITY)]);
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+
+    await selectCategory(user, 'VIP Standing');
+    const increment = screen.getByRole('button', { name: /increase quantity/i });
+    await user.click(increment);
+    await user.click(increment);
+    expect(screen.getByText('3')).toBeInTheDocument();
+
+    await selectCategory(user, 'General Admission');
+    expect(screen.getByText('1')).toBeInTheDocument();
+  });
+
+  it("shows the running total using the availability response's currency, not a hardcoded $", async () => {
+    const user = userEvent.setup();
+    stubFetch([availabilityResponse(AVAILABILITY)]);
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+
+    await selectCategory(user, 'General Admission'); // unitPrice 85, currency LKR
+    const increment = screen.getByRole('button', { name: /increase quantity/i });
+    await user.click(increment);
+    await user.click(increment);
+
+    expect(screen.getByText(/LKR\s*255\.00/)).toBeInTheDocument();
+  });
+
+  it('has no quantity control for a sold-out category', async () => {
+    const soldOut: AvailabilityEntry[] = [
+      { categoryId: 'cat-a', capacity: 1500, available: 0, unitPrice: 85, currency: 'LKR' },
+      { categoryId: 'cat-b', capacity: 100, available: 12, unitPrice: 180, currency: 'LKR' }
+    ];
+    stubFetch([availabilityResponse(soldOut)]);
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+
+    await screen.findByText('Sold out');
+    // The default selection skips the sold-out category, so its quantity control
+    // never appears at all for it — only the available one is selectable.
+    expect(screen.queryByRole('button', { name: /increase quantity/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /increase quantity/i })).toHaveLength(1);
+  });
+});
+
+describe('EventDetail signing in before a hold', () => {
+  it('sends a signed-out customer to sign in instead of firing a hold request', async () => {
+    authState.isAuthenticated = false;
+    const user = userEvent.setup();
+    stubFetch([availabilityResponse(AVAILABILITY)]);
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+
+    await screen.findByText('General Admission');
+    await user.click(screen.getByRole('button', { name: /buy now/i }));
+
+    expect(mockLogin).toHaveBeenCalledTimes(1);
+    expect(mockApiFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('EventDetail hold confirmation and countdown', () => {
+  it('holds tickets and shows a confirmation with a countdown that recomputes from expiresAt', async () => {
+    vi.useFakeTimers();
+    const fixedNow = new Date('2026-01-01T00:00:00.000Z').getTime();
+    vi.setSystemTime(fixedNow);
+
+    stubFetch([availabilityResponse(AVAILABILITY)]);
+    const expiresAt = new Date(fixedNow + 5 * 60 * 1000).toISOString();
+    mockApiFetch.mockResolvedValue(
+      holdResponse({ expiresAt, items: [{ categoryId: 'cat-a', quantity: 2, unitPrice: 85, currency: 'LKR' }] })
+    );
+
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('General Admission')).toBeInTheDocument();
+
+    // Bump quantity to 2 so the confirmation's unit price and total read
+    // differently — otherwise they'd coincidentally both show "LKR 85.00".
+    await act(async () => {
+      screen.getByRole('button', { name: /increase quantity/i }).click();
+    });
+
+    // A plain click, not user-event — user-event's internal pointer-delay timers
+    // don't play well with vi's fake timers here, and this interaction is trivial.
+    await act(async () => {
+      screen.getByRole('button', { name: /buy now/i }).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    expect(screen.getByText('Tickets Held!')).toBeInTheDocument();
+    expect(mockApiFetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/inventory\/holds$/),
+      expect.objectContaining({ method: 'POST' })
+    );
+    const [, options] = mockApiFetch.mock.calls[0];
+    expect(JSON.parse(options.body as string)).toEqual({
+      showId: 'show-1',
+      items: [{ categoryId: 'cat-a', quantity: 2 }]
+    });
+    expect(screen.getByText('LKR 85.00')).toBeInTheDocument();
+    expect(screen.getByText('LKR 170.00')).toBeInTheDocument();
+    expect(screen.getByText('5:00')).toBeInTheDocument();
+
+    // One large jump, not a series of small ones — a countdown that decrements a
+    // stored number instead of recomputing from expiresAt would still show close to
+    // 5:00 here (or drift), rather than landing exactly on the correct value.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(61_000);
+    });
+    expect(screen.getByText('3:59')).toBeInTheDocument();
+  });
+
+  it('tells the customer the hold expired and returns to ticket selection when the countdown reaches zero', async () => {
+    vi.useFakeTimers();
+    const fixedNow = new Date('2026-01-01T00:00:00.000Z').getTime();
+    vi.setSystemTime(fixedNow);
+
+    stubFetch([availabilityResponse(AVAILABILITY)]);
+    const expiresAt = new Date(fixedNow + 3000).toISOString();
+    mockApiFetch.mockResolvedValue(holdResponse({ expiresAt }));
+
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    await act(async () => {
+      screen.getByRole('button', { name: /buy now/i }).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('Tickets Held!')).toBeInTheDocument();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3500);
+    });
+
+    expect(screen.getByText(/hold expired/i)).toBeInTheDocument();
+    expect(screen.getByText('Select Tickets')).toBeInTheDocument();
+    expect(screen.getByText('General Admission')).toBeInTheDocument();
+  });
+
+  it('keeps availability current in the background during a hold, so numbers are fresh the moment it expires', async () => {
+    vi.useFakeTimers();
+    const fixedNow = new Date('2026-01-01T00:00:00.000Z').getTime();
+    vi.setSystemTime(fixedNow);
+
+    const droppedAvailability: AvailabilityEntry[] = [
+      { categoryId: 'cat-a', capacity: 1500, available: 338, unitPrice: 85, currency: 'LKR' },
+      { categoryId: 'cat-b', capacity: 100, available: 12, unitPrice: 180, currency: 'LKR' }
+    ];
+    stubFetch([availabilityResponse(AVAILABILITY), availabilityResponse(droppedAvailability)]);
+    const expiresAt = new Date(fixedNow + 4000).toISOString();
+    mockApiFetch.mockResolvedValue(
+      holdResponse({ expiresAt, items: [{ categoryId: 'cat-a', quantity: 2, unitPrice: 85, currency: 'LKR' }] })
+    );
+
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('340 left')).toBeInTheDocument();
+
+    await act(async () => {
+      screen.getByRole('button', { name: /buy now/i }).click();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(screen.getByText('Tickets Held!')).toBeInTheDocument();
+
+    // A poll lands while the confirmation is showing — the drop isn't visible on
+    // screen yet (the category list isn't rendered), but it's already in state.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000);
+    });
+
+    // The hold expires and selection reappears — the numbers are already current;
+    // no extra poll or page reload is needed for them to show.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    expect(screen.getByText(/hold expired/i)).toBeInTheDocument();
+    expect(screen.getByText('338 left')).toBeInTheDocument();
+  });
+});
+
+describe('EventDetail hold failures', () => {
+  it.each([
+    { status: 409, detail: 'Those tickets are no longer available.', match: /those tickets are no longer available/i },
+    { status: 422, detail: 'You may hold at most 4 tickets for this show.', match: /at most 4 tickets/i }
+  ])('shows the server\'s own message for a $status response and leaves the customer able to try again', async ({ status, detail, match }) => {
+    const user = userEvent.setup();
+    stubFetch([availabilityResponse(AVAILABILITY)]);
+    mockApiFetch.mockResolvedValue(jsonResponse({ title: 'Error', detail, status }, status));
+
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+    await screen.findByText('General Admission');
+    await user.click(screen.getByRole('button', { name: /buy now/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(match);
+    expect(screen.getByText('Select Tickets')).toBeInTheDocument();
+    expect(screen.queryByText('Tickets Held!')).not.toBeInTheDocument();
+  });
+
+  it('tells the customer to wait on a 429, rather than showing a raw error', async () => {
+    const user = userEvent.setup();
+    stubFetch([availabilityResponse(AVAILABILITY)]);
+    mockApiFetch.mockResolvedValue(jsonResponse({ title: 'Too Many Requests' }, 429));
+
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+    await screen.findByText('General Admission');
+    await user.click(screen.getByRole('button', { name: /buy now/i }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/wait/i);
+    expect(alert).not.toHaveTextContent(/too many requests/i);
+  });
+
+  it('shows a plain apology on a 400, not the raw error body', async () => {
+    const user = userEvent.setup();
+    stubFetch([availabilityResponse(AVAILABILITY)]);
+    mockApiFetch.mockResolvedValue(jsonResponse({ title: 'Bad Request' }, 400));
+
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+    await screen.findByText('General Admission');
+    await user.click(screen.getByRole('button', { name: /buy now/i }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/went wrong on our side/i);
+    expect(alert).not.toHaveTextContent(/bad request/i);
+  });
+
+  it('preserves the chosen quantity after a failed hold attempt', async () => {
+    const user = userEvent.setup();
+    stubFetch([availabilityResponse(AVAILABILITY)]);
+    mockApiFetch.mockResolvedValue(jsonResponse({ detail: 'Those tickets are no longer available.' }, 409));
+
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+    await selectCategory(user, 'VIP Standing');
+    const increment = screen.getByRole('button', { name: /increase quantity/i });
+    await user.click(increment);
+    await user.click(increment);
+    expect(screen.getByText('3')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /buy now/i }));
+    await screen.findByRole('alert');
+
+    expect(screen.getByText('3')).toBeInTheDocument();
   });
 });
