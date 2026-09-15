@@ -3,6 +3,14 @@ import { render, screen, act } from '@testing-library/react';
 import { EventDetail } from './EventDetail';
 import type { AvailabilityEntry } from './inventoryApi';
 
+vi.mock('../auth/AuthContext', () => ({
+  useAuth: () => ({
+    isAuthenticated: true,
+    login: vi.fn(),
+    apiFetch: globalThis.fetch,
+  }),
+}));
+
 const EVENT = {
   id: 'evt-1',
   organizerId: 'org-1',
