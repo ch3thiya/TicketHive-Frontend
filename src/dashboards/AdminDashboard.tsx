@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { ArrowLeft, MapPin, Plus, Edit3 } from 'lucide-react';
+import { ArrowLeft, MapPin, Plus, Edit3, Trash2 } from 'lucide-react';
 import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
 import { VenueFormPopUp } from '../popUps/VenueFormPopUp';
-import { fetchVenues, createVenue, updateVenue, type Venue, type VenueInput } from '../common/venueApi';
+import { fetchVenues, createVenue, updateVenue, deleteVenue, type Venue, type VenueInput } from '../common/venueApi';
 
 interface PendingRequest {
   requestId: string;
@@ -51,6 +51,12 @@ export const AdminDashboard: React.FC = () => {
   const [editingVenue, setEditingVenue] = useState<Venue | null>(null);
   const [venueFormLoading, setVenueFormLoading] = useState(false);
   const [venueFormError, setVenueFormError] = useState<string | null>(null);
+
+  // Venue delete modal states
+  const [isVenueDeleteOpen, setIsVenueDeleteOpen] = useState(false);
+  const [deletingVenue, setDeletingVenue] = useState<Venue | null>(null);
+  const [venueDeleteLoading, setVenueDeleteLoading] = useState(false);
+  const [venueActionError, setVenueActionError] = useState<string | null>(null);
 
   const fetchPendingRequests = useCallback(async () => {
     try {
@@ -188,6 +194,30 @@ export const AdminDashboard: React.FC = () => {
       setVenueFormError(err instanceof Error ? err.message : 'Failed to save venue.');
     } finally {
       setVenueFormLoading(false);
+    }
+  };
+
+  const handleOpenDeleteVenue = (venue: Venue) => {
+    setDeletingVenue(venue);
+    setVenueActionError(null);
+    setIsVenueDeleteOpen(true);
+  };
+
+  const handleConfirmDeleteVenue = async () => {
+    if (!deletingVenue) return;
+    setVenueDeleteLoading(true);
+    try {
+      await deleteVenue(apiFetch, deletingVenue.id);
+      setVenues(prev => prev.filter(v => v.id !== deletingVenue.id));
+      setIsVenueDeleteOpen(false);
+      setDeletingVenue(null);
+    } catch (err) {
+      // Keep the venue in the list (e.g. 409 because a show still uses it)
+      // and surface the server's own message.
+      setVenueActionError(err instanceof Error ? err.message : 'Failed to delete venue.');
+      setIsVenueDeleteOpen(false);
+    } finally {
+      setVenueDeleteLoading(false);
     }
   };
 
@@ -373,6 +403,18 @@ export const AdminDashboard: React.FC = () => {
             </button>
           </div>
 
+          {venueActionError && (
+            <div className="bg-red-50 border-2 border-red-500 rounded-16 p-4 mb-6 text-[#FF3B3B] font-medium text-sm flex items-center justify-between gap-4">
+              <span>{venueActionError}</span>
+              <button
+                onClick={() => setVenueActionError(null)}
+                className="shrink-0 font-bold text-[#FF3B3B] hover:underline cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+
           {venuesLoading ? (
             <div className="py-8 flex justify-center">
               <div className="w-10 h-10 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
@@ -396,13 +438,22 @@ export const AdminDashboard: React.FC = () => {
                     <h3 className="font-body font-bold text-[15px] text-ink-black">
                       {venue.name}
                     </h3>
-                    <button
-                      onClick={() => handleOpenEditVenue(venue)}
-                      className="shrink-0 w-7 h-7 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light transition-all"
-                      aria-label={`Edit ${venue.name}`}
-                    >
-                      <Edit3 size={12} strokeWidth={2.5} />
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => handleOpenEditVenue(venue)}
+                        className="w-7 h-7 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light transition-all"
+                        aria-label={`Edit ${venue.name}`}
+                      >
+                        <Edit3 size={12} strokeWidth={2.5} />
+                      </button>
+                      <button
+                        onClick={() => handleOpenDeleteVenue(venue)}
+                        className="w-7 h-7 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-[#FF3B3B]/10 transition-all"
+                        aria-label={`Delete ${venue.name}`}
+                      >
+                        <Trash2 size={12} strokeWidth={2.5} className="text-[#FF3B3B]" />
+                      </button>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 text-[13px] text-ink-gray-70">
                     <MapPin size={13} className="text-[#FF3B3B] shrink-0" strokeWidth={2.5} />
@@ -448,6 +499,26 @@ export const AdminDashboard: React.FC = () => {
         initialValues={editingVenue ? { name: editingVenue.name, address: editingVenue.address, capacity: editingVenue.capacity } : undefined}
         isLoading={venueFormLoading}
         error={venueFormError}
+      />
+
+      {/* 7. Venue Delete Confirmation Modal */}
+      <ConfirmDeletePopUp
+        isOpen={isVenueDeleteOpen}
+        onClose={() => {
+          setIsVenueDeleteOpen(false);
+          setDeletingVenue(null);
+        }}
+        onConfirm={handleConfirmDeleteVenue}
+        title="Delete Venue?"
+        description={
+          <>
+            Are you sure you want to delete{' '}
+            <span className="font-bold text-ink-black">{deletingVenue?.name}</span>?
+            This cannot be undone.
+          </>
+        }
+        confirmText={venueDeleteLoading ? 'Deleting...' : 'Delete'}
+        isLoading={venueDeleteLoading}
       />
 
     </div>

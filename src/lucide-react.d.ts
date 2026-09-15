@@ -21,6 +21,7 @@ declare module 'lucide-react' {
   export const AlertCircle: Icon;
   export const CheckCircle: Icon;
   export const Edit3: Icon;
+  export const Trash2: Icon;
   export const Ban: Icon;
   export const Layers: Icon;
   export const Send: Icon;
