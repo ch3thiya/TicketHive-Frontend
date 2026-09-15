@@ -187,7 +187,7 @@ export const AdminDashboard: React.FC = () => {
         setVenues(prev => [...prev, newVenue].sort((a, b) => a.name.localeCompare(b.name)));
       } else if (editingVenue) {
         const updated = await updateVenue(apiFetch, editingVenue.id, input);
-        setVenues(prev => prev.map(v => (v.id === updated.id ? updated : v)));
+        setVenues(prev => prev.map(v => (v.id === editingVenue.id ? { ...v, ...input, ...(updated && updated.id ? updated : {}) } : v)));
       }
       setIsVenueFormOpen(false);
     } catch (err) {
@@ -460,7 +460,7 @@ export const AdminDashboard: React.FC = () => {
                     <span>{venue.address}</span>
                   </div>
                   <div className="font-body font-bold text-[13px] text-brand-blue mt-1">
-                    Capacity: {venue.capacity.toLocaleString()}
+                    Capacity: {(venue.capacity ?? 0).toLocaleString()}
                   </div>
                 </div>
               ))}
