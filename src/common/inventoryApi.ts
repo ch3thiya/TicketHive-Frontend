@@ -10,6 +10,11 @@ export interface AvailabilityEntry {
   currency: string;
 }
 
+interface AvailabilityResponse {
+  showId: string;
+  categories: AvailabilityEntry[];
+}
+
 // The backend returns ProblemDetails ({ title, detail, status }) for failures.
 interface ProblemDetailsBody {
   detail?: string;
@@ -48,5 +53,6 @@ export async function fetchAvailability(showId: string, fetchFn: FetchFn = fetch
     throw new Error(await extractErrorMessage(res, 'Failed to load availability.'));
   }
 
-  return res.json();
+  const body: AvailabilityResponse = await res.json();
+  return body.categories;
 }

@@ -6,13 +6,15 @@ const ENTRIES: AvailabilityEntry[] = [
   { categoryId: 'cat-2', capacity: 100, available: 0, unitPrice: 180, currency: 'LKR' }
 ];
 
+const AVAILABILITY_RESPONSE = { showId: 'show-1', categories: ENTRIES };
+
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe('fetchAvailability', () => {
   it('requests the show availability endpoint and returns the parsed body', async () => {
-    const fetchFn = vi.fn().mockResolvedValue(new Response(JSON.stringify(ENTRIES), { status: 200 }));
+    const fetchFn = vi.fn().mockResolvedValue(new Response(JSON.stringify(AVAILABILITY_RESPONSE), { status: 200 }));
 
     const result = await fetchAvailability('show-1', fetchFn);
 
