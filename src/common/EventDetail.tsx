@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from '../components/Badge';
 import { ArrowLeft, Calendar, Clock, MapPin, ShieldAlert, ArrowRight, Lock, Minus, Plus } from 'lucide-react';
 import { fetchAvailability, AvailabilityNotFoundError, type AvailabilityEntry } from './inventoryApi';
+import { createHold, type Hold } from './holdsApi';
+import { useAuth } from '../auth/AuthContext';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
@@ -60,9 +62,18 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   eventId,
   onNavigateBack,
 }) => {
+  const { isAuthenticated, apiFetch, login } = useAuth();
+
   const [event, setEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [hold, setHold] = useState<Hold | null>(null);
+  const [isHolding, setIsHolding] = useState(false);
+  const [holdError, setHoldError] = useState<string | null>(null);
+  const [holdExpired, setHoldExpired] = useState(false);
+  // Ticks once a second while a hold is active, purely to force the countdown to
+  // re-render — the remaining time itself is always recomputed from expiresAt.
+  const [nowTick, setNowTick] = useState(() => Date.now());
   // null until the customer explicitly picks a row — the default (first available
   // category) is derived below, once real category ids are known.
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -175,6 +186,29 @@ export const EventDetail: React.FC<EventDetailProps> = ({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [activeShowId]);
+
+  // Recomputes the remaining time from expiresAt on every tick rather than
+  // decrementing a stored counter, so a backgrounded tab or a slow render can't
+  // make the countdown drift from the server's actual expiry.
+  useEffect(() => {
+    if (!hold) return;
+
+    const expiresAtMs = new Date(hold.expiresAt).getTime();
+
+    const checkExpiry = () => {
+      const remaining = expiresAtMs - Date.now();
+      if (remaining <= 0) {
+        setHold(null);
+        setHoldExpired(true);
+      } else {
+        setNowTick(Date.now());
+      }
+    };
+
+    checkExpiry();
+    const intervalId = setInterval(checkExpiry, 1000);
+    return () => clearInterval(intervalId);
+  }, [hold]);
 
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return 'Sat, Sep 12, 2026';
@@ -337,6 +371,45 @@ export const EventDetail: React.FC<EventDetailProps> = ({
 
   const decrementQuantity = () => {
     setQuantity((q) => Math.max(q - 1, 1));
+  };
+
+  const heldItem = hold?.items[0] ?? null;
+  const heldCategoryName = heldItem
+    ? ticketCategories.find((cat, idx) => getCategoryId(cat, idx) === heldItem.categoryId)?.name ?? 'Your tickets'
+    : null;
+  const remainingMs = hold ? new Date(hold.expiresAt).getTime() - nowTick : 0;
+
+  const formatCountdown = (ms: number) => {
+    const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const handleBuyNow = async () => {
+    // Holds require authentication, unlike availability — send a signed-out
+    // customer to sign in before firing a request that would just 401.
+    if (!isAuthenticated) {
+      login();
+      return;
+    }
+    if (!activeShowId || activeSelectedId === null || isBuyDisabled || isHolding) return;
+
+    setIsHolding(true);
+    setHoldError(null);
+    setHoldExpired(false);
+
+    try {
+      const created = await createHold(apiFetch, {
+        showId: activeShowId,
+        items: [{ categoryId: activeSelectedId, quantity: effectiveQuantity }]
+      });
+      setHold(created);
+    } catch (err) {
+      setHoldError(err instanceof Error ? err.message : 'Unable to hold tickets right now.');
+    } finally {
+      setIsHolding(false);
+    }
   };
 
   const eventVenue = displayEvent.venue || activeShow?.venueName || 'Madison Square Garden, NYC';
@@ -509,14 +582,76 @@ export const EventDetail: React.FC<EventDetailProps> = ({
             <div className="bg-brand-white border-3 border-ink-black rounded-[24px] shadow-[8px_8px_0px_0px_#0A0A0F] p-6 flex flex-col gap-5">
               
               <h3 className="font-heading font-extrabold text-xl text-ink-black">
-                Select Tickets
+                {hold ? 'Tickets Held!' : 'Select Tickets'}
               </h3>
 
-              {availabilityStatus === 'error' && (
-                <p className="font-body text-xs font-medium text-ink-gray-70 -mt-3">
-                  Live availability isn't available right now — ticket counts will appear once it's back.
-                </p>
-              )}
+              {hold && heldItem ? (
+                <div className="flex flex-col gap-4">
+                  <div className="border-2 border-ink-black rounded-xl p-4 flex flex-col gap-3 bg-[#F0FFF7]">
+                    <div className="flex items-center justify-between">
+                      <span className="font-body font-bold text-sm text-ink-black">
+                        {heldCategoryName}
+                      </span>
+                      <Badge variant="success" uppercase>
+                        {hold.status}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center justify-between text-sm font-body">
+                      <span className="text-ink-gray-70 font-medium">Quantity</span>
+                      <span className="font-bold text-ink-black">{heldItem.quantity}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm font-body">
+                      <span className="text-ink-gray-70 font-medium">Unit price</span>
+                      <span className="font-bold text-ink-black">
+                        {heldItem.currency} {heldItem.unitPrice.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between border-t-2 border-ink-gray-30/40 pt-3">
+                      <span className="font-body text-xs font-bold text-ink-gray-70 uppercase tracking-wider">
+                        Total
+                      </span>
+                      <span className="font-heading font-extrabold text-base text-brand-blue">
+                        {heldItem.currency} {(heldItem.unitPrice * heldItem.quantity).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="border-2 border-ink-black rounded-xl p-4 flex flex-col items-center gap-1 bg-[#FFF9E5]">
+                    <span className="font-body text-xs font-bold text-ink-gray-70 uppercase tracking-wider">
+                      Time remaining
+                    </span>
+                    <span className="font-heading font-extrabold text-3xl text-ink-black tabular-nums">
+                      {formatCountdown(remainingMs)}
+                    </span>
+                  </div>
+
+                  <p className="font-body text-xs font-medium text-ink-gray-70 text-center">
+                    Payment is coming soon — for now, your tickets are just held.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {holdExpired && (
+                    <div className="border-2 border-state-warning bg-[#FFF9E5] rounded-xl p-3 text-center">
+                      <p className="font-body text-xs font-bold text-ink-black">
+                        Your hold expired and the tickets were released. Pick a quantity and try again.
+                      </p>
+                    </div>
+                  )}
+
+                  {holdError && (
+                    <div className="border-2 border-state-error bg-red-50 rounded-xl p-3 text-center">
+                      <p className="font-body text-xs font-bold text-state-error">
+                        {holdError}
+                      </p>
+                    </div>
+                  )}
+
+                  {availabilityStatus === 'error' && (
+                    <p className="font-body text-xs font-medium text-ink-gray-70 -mt-3">
+                      Live availability isn't available right now — ticket counts will appear once it's back.
+                    </p>
+                  )}
 
               {/* Ticket Category Tier Options */}
               <div className="flex flex-col gap-3">
@@ -620,14 +755,11 @@ export const EventDetail: React.FC<EventDetailProps> = ({
 
               {/* Buy Now Primary Button */}
               <button
-                onClick={() => {
-                  const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
-                  alert(`Proceeding to checkout for ${selectedCat.name} ($${selectedCat.price})`);
-                }}
-                disabled={isBuyDisabled}
+                onClick={handleBuyNow}
+                disabled={isBuyDisabled || isHolding}
                 className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 active:shadow-[1px_1px_0px_0px_#0A0A0F] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:bg-ink-gray-30 disabled:text-ink-gray-70 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-x-0 disabled:hover:translate-y-0"
               >
-                <span>Buy Now</span>
+                <span>{isHolding ? 'Holding…' : 'Buy Now'}</span>
                 <ArrowRight size={18} strokeWidth={2.5} />
               </button>
 
@@ -636,6 +768,8 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 <Lock size={14} className="text-ink-gray-70" />
                 <span>Secure checkout · Instant e-ticket delivery</span>
               </div>
+                </>
+              )}
 
             </div>
           </div>
