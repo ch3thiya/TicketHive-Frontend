@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { ArrowLeft, MapPin, Plus } from 'lucide-react';
+import { ArrowLeft, MapPin, Plus, Edit3 } from 'lucide-react';
 import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
-import { fetchVenues, type Venue } from '../common/venueApi';
+import { VenueFormPopUp } from '../popUps/VenueFormPopUp';
+import { fetchVenues, createVenue, updateVenue, type Venue, type VenueInput } from '../common/venueApi';
 
 interface PendingRequest {
   requestId: string;
@@ -43,6 +44,13 @@ export const AdminDashboard: React.FC = () => {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [venuesLoading, setVenuesLoading] = useState(true);
   const [venuesError, setVenuesError] = useState<string | null>(null);
+
+  // Venue create/edit modal states
+  const [isVenueFormOpen, setIsVenueFormOpen] = useState(false);
+  const [venueFormMode, setVenueFormMode] = useState<'create' | 'edit'>('create');
+  const [editingVenue, setEditingVenue] = useState<Venue | null>(null);
+  const [venueFormLoading, setVenueFormLoading] = useState(false);
+  const [venueFormError, setVenueFormError] = useState<string | null>(null);
 
   const fetchPendingRequests = useCallback(async () => {
     try {
@@ -148,6 +156,39 @@ export const AdminDashboard: React.FC = () => {
   const goBackToHome = () => {
     window.history.pushState({}, '', '/');
     window.dispatchEvent(new PopStateEvent('popstate'));
+  };
+
+  const handleOpenAddVenue = () => {
+    setVenueFormMode('create');
+    setEditingVenue(null);
+    setVenueFormError(null);
+    setIsVenueFormOpen(true);
+  };
+
+  const handleOpenEditVenue = (venue: Venue) => {
+    setVenueFormMode('edit');
+    setEditingVenue(venue);
+    setVenueFormError(null);
+    setIsVenueFormOpen(true);
+  };
+
+  const handleVenueFormSubmit = async (input: VenueInput) => {
+    setVenueFormLoading(true);
+    setVenueFormError(null);
+    try {
+      if (venueFormMode === 'create') {
+        const newVenue = await createVenue(apiFetch, input);
+        setVenues(prev => [...prev, newVenue].sort((a, b) => a.name.localeCompare(b.name)));
+      } else if (editingVenue) {
+        const updated = await updateVenue(apiFetch, editingVenue.id, input);
+        setVenues(prev => prev.map(v => (v.id === updated.id ? updated : v)));
+      }
+      setIsVenueFormOpen(false);
+    } catch (err) {
+      setVenueFormError(err instanceof Error ? err.message : 'Failed to save venue.');
+    } finally {
+      setVenueFormLoading(false);
+    }
   };
 
 
@@ -324,6 +365,7 @@ export const AdminDashboard: React.FC = () => {
               Managed Venues
             </h2>
             <button
+              onClick={handleOpenAddVenue}
               className="font-body font-bold text-[13px] text-ink-black bg-[#FFE94D] border-2.5 border-ink-black rounded-full px-4 py-2 hover:bg-[#F3DC3C] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F] flex items-center gap-1.5"
             >
               <Plus size={14} strokeWidth={3} />
@@ -350,9 +392,18 @@ export const AdminDashboard: React.FC = () => {
                   key={venue.id}
                   className="bg-[#F9F9FC] border-2.5 border-ink-black rounded-16 p-5 flex flex-col gap-2 shadow-sm select-none hover:shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-y-px active:shadow-sm transition-all duration-150"
                 >
-                  <h3 className="font-body font-bold text-[15px] text-ink-black">
-                    {venue.name}
-                  </h3>
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-body font-bold text-[15px] text-ink-black">
+                      {venue.name}
+                    </h3>
+                    <button
+                      onClick={() => handleOpenEditVenue(venue)}
+                      className="shrink-0 w-7 h-7 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light transition-all"
+                      aria-label={`Edit ${venue.name}`}
+                    >
+                      <Edit3 size={12} strokeWidth={2.5} />
+                    </button>
+                  </div>
                   <div className="flex items-center gap-1 text-[13px] text-ink-gray-70">
                     <MapPin size={13} className="text-[#FF3B3B] shrink-0" strokeWidth={2.5} />
                     <span>{venue.address}</span>
@@ -386,6 +437,17 @@ export const AdminDashboard: React.FC = () => {
         }
         confirmText={actioningId !== null && actionType === 'reject' ? 'Deleting...' : 'Delete & Reject'}
         isLoading={actioningId !== null}
+      />
+
+      {/* 6. Venue Create/Edit Modal */}
+      <VenueFormPopUp
+        isOpen={isVenueFormOpen}
+        onClose={() => setIsVenueFormOpen(false)}
+        onSubmit={handleVenueFormSubmit}
+        mode={venueFormMode}
+        initialValues={editingVenue ? { name: editingVenue.name, address: editingVenue.address, capacity: editingVenue.capacity } : undefined}
+        isLoading={venueFormLoading}
+        error={venueFormError}
       />
 
     </div>
