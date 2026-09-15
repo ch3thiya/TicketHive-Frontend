@@ -478,15 +478,15 @@ export const AdminDashboard: React.FC = () => {
           setDeletingRequestId(null);
         }}
         onConfirm={() => deletingRequestId && handleReject(deletingRequestId)}
-        title="Delete Request?"
+        title="Reject Request?"
         description={
           <>
             Are you sure you want to reject the request for{' '}
             <span className="font-bold text-ink-black">{deletingOrgName}</span>?
-            This will permanently delete their account from the system.
+            Their account stays active — they will remain a regular customer.
           </>
         }
-        confirmText={actioningId !== null && actionType === 'reject' ? 'Deleting...' : 'Delete & Reject'}
+        confirmText={actioningId !== null && actionType === 'reject' ? 'Rejecting...' : 'Reject Request'}
         isLoading={actioningId !== null}
       />
 
