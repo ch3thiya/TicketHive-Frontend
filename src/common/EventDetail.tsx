@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from '../components/Badge';
 import { ArrowLeft, Calendar, Clock, MapPin, ShieldAlert, ArrowRight, Lock } from 'lucide-react';
 import { fetchAvailability, AvailabilityNotFoundError, type AvailabilityEntry } from './inventoryApi';
+import { useAuth } from '../auth/AuthContext';
+import { WaitingRoomPopUp } from '../popUps/WaitingRoomPopUp';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
@@ -60,12 +62,13 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   eventId,
   onNavigateBack,
 }) => {
+  const { isAuthenticated, login, apiFetch } = useAuth();
   const [event, setEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  // null until the customer explicitly picks a row — the default (first available
-  // category) is derived below, once real category ids are known.
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  const [isWaitingRoomOpen, setIsWaitingRoomOpen] = useState(false);
+  const [admissionToken, setAdmissionToken] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchEventDetail = async () => {
@@ -550,6 +553,17 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               {/* Buy Now Primary Button */}
               <button
                 onClick={() => {
+                  if (!isAuthenticated) {
+                    login();
+                    return;
+                  }
+
+                  // If high demand and no admission token yet, trigger waiting room popup
+                  if ((activeShow?.highDemandThreshold || (activeShow as any)?.highDemand) && !admissionToken) {
+                    setIsWaitingRoomOpen(true);
+                    return;
+                  }
+
                   const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
                   alert(`Proceeding to checkout for ${selectedCat.name} ($${selectedCat.price})`);
                 }}
@@ -571,6 +585,20 @@ export const EventDetail: React.FC<EventDetailProps> = ({
 
         </div>
       </div>
+
+      {/* Waiting Room Modal Popup matching user UI */}
+      {activeShowId && (
+        <WaitingRoomPopUp
+          isOpen={isWaitingRoomOpen}
+          showId={activeShowId}
+          apiFetch={apiFetch}
+          onAdmitted={(token) => {
+            setAdmissionToken(token);
+            setIsWaitingRoomOpen(false);
+          }}
+          onClose={() => setIsWaitingRoomOpen(false)}
+        />
+      )}
     </div>
   );
 };
