@@ -63,7 +63,9 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const [event, setEvent] = useState<EventItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [selectedTicketId, setSelectedTicketId] = useState<string>('cat-1');
+  // null until the customer explicitly picks a row — the default (first available
+  // category) is derived below, once real category ids are known.
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchEventDetail = async () => {
@@ -298,7 +300,22 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const isCategorySoldOut = (cat: TicketCategory, idx: number) =>
     availabilityMap[getCategoryId(cat, idx)]?.available === 0;
   const allCategoriesSoldOut = ticketCategories.every((cat, idx) => isCategorySoldOut(cat, idx));
-  const isSelectedCategorySoldOut = availabilityMap[selectedTicketId]?.available === 0;
+
+  // The default selection is the first non-sold-out category (falling back to the
+  // first category if every one is sold out) — never a hardcoded id, since real
+  // categories use GUIDs. A customer's explicit click always wins once it's made
+  // against a category that still exists.
+  const firstAvailableCategory = ticketCategories.find((cat, idx) => !isCategorySoldOut(cat, idx));
+  const defaultCategoryId = firstAvailableCategory
+    ? getCategoryId(firstAvailableCategory, ticketCategories.indexOf(firstAvailableCategory))
+    : ticketCategories.length > 0
+      ? getCategoryId(ticketCategories[0], 0)
+      : null;
+  const hasExplicitSelection =
+    selectedTicketId !== null && ticketCategories.some((cat, idx) => getCategoryId(cat, idx) === selectedTicketId);
+  const activeSelectedId = hasExplicitSelection ? selectedTicketId : defaultCategoryId;
+
+  const isSelectedCategorySoldOut = activeSelectedId !== null && availabilityMap[activeSelectedId]?.available === 0;
   const isBuyDisabled = allCategoriesSoldOut || isSelectedCategorySoldOut;
 
   const eventVenue = displayEvent.venue || activeShow?.venueName || 'Madison Square Garden, NYC';
@@ -484,7 +501,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               <div className="flex flex-col gap-3">
                 {ticketCategories.map((cat, idx) => {
                   const catId = getCategoryId(cat, idx);
-                  const isSelected = selectedTicketId === catId;
+                  const isSelected = activeSelectedId === catId;
                   const entry = availabilityMap[catId];
                   const isSoldOut = isCategorySoldOut(cat, idx);
 
@@ -533,7 +550,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               {/* Buy Now Primary Button */}
               <button
                 onClick={() => {
-                  const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === selectedTicketId) || ticketCategories[0];
+                  const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
                   alert(`Proceeding to checkout for ${selectedCat.name} ($${selectedCat.price})`);
                 }}
                 disabled={isBuyDisabled}

@@ -146,6 +146,28 @@ describe('EventDetail live availability', () => {
     expect(screen.getByRole('button', { name: /buy now/i })).toBeDisabled();
   });
 
+  it('defaults selection to the first available category when the first category is sold out and nothing has been clicked', async () => {
+    const firstSoldOut: AvailabilityEntry[] = [
+      { categoryId: 'cat-a', capacity: 1500, available: 0, unitPrice: 85, currency: 'LKR' },
+      { categoryId: 'cat-b', capacity: 100, available: 12, unitPrice: 180, currency: 'LKR' }
+    ];
+    stubFetch([jsonResponse(firstSoldOut)]);
+
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+
+    expect(await screen.findByText('Sold out')).toBeInTheDocument();
+
+    const soldOutCard = screen.getByText('Sold out').closest('[aria-disabled]') as HTMLElement;
+    const availableCard = screen.getByText('VIP Standing').closest('[aria-disabled]') as HTMLElement;
+
+    // The sold-out category (first in the list) must not be the active selection...
+    expect(soldOutCard.className).not.toMatch(/ring-brand-blue/);
+    // ...and the still-available category should be picked as the default instead.
+    expect(availableCard.className).toMatch(/ring-brand-blue/);
+    // Buy Now must not be disabled against the sold-out category that isn't selected.
+    expect(screen.getByRole('button', { name: /buy now/i })).toBeEnabled();
+  });
+
   it('keeps the last known numbers on screen and keeps polling when a later poll fails', async () => {
     vi.useFakeTimers();
     const fetchMock = stubFetch([jsonResponse(AVAILABILITY), new Error('dropped request')]);
