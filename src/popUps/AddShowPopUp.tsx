@@ -5,6 +5,7 @@ import { VenueSelect } from '../components/VenueSelect';
 import type { Venue } from '../common/venueApi';
 
 export interface TicketCategoryInput {
+  id?: string;
   name: string;
   price: string;
   capacity: string;
