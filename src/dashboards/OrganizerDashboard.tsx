@@ -64,6 +64,7 @@ interface EventItem {
 }
 
 interface NewTicketCategoryForm {
+  id?: string;
   name: string;
   price: string;
   capacity: string;
@@ -634,6 +635,7 @@ export const OrganizerDashboard: React.FC = () => {
           ? parseInt(showReminderMinutesBefore, 10)
           : null,
         categories: showCategories.map(c => ({
+          ...(c.id ? { id: c.id } : {}),
           name: c.name.trim(),
           price: parseFloat(c.price) || 0,
           capacity: parseInt(c.capacity, 10) || 0
@@ -782,6 +784,7 @@ export const OrganizerDashboard: React.FC = () => {
     if (show.ticketCategories && show.ticketCategories.length > 0) {
       setShowCategories(
         show.ticketCategories.map((c) => ({
+          id: c.id,
           name: c.name || '',
           price: c.price !== undefined && c.price !== null ? c.price.toString() : '',
           capacity: c.capacity !== undefined && c.capacity !== null ? c.capacity.toString() : ''
