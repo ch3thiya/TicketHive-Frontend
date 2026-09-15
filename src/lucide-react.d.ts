@@ -37,6 +37,7 @@ declare module 'lucide-react' {
   export const Search: Icon;
   export const ArrowRight: Icon;
   export const Lock: Icon;
+  export const ChevronDown: Icon;
 
   export const icons: Record<string, Icon>;
 }
