@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Badge } from '../components/Badge';
-import { ArrowLeft, Calendar, Clock, MapPin, ShieldAlert, ArrowRight, Lock } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, ShieldAlert, ArrowRight, Lock, Minus, Plus } from 'lucide-react';
 import { fetchAvailability, AvailabilityNotFoundError, type AvailabilityEntry } from './inventoryApi';
 
 const CATALOG_API_URL =
@@ -66,6 +66,9 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   // null until the customer explicitly picks a row — the default (first available
   // category) is derived below, once real category ids are known.
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+  // Default 1, reset to 1 whenever the selected category changes (see the category
+  // click handler below) — never carried over from a different category's cap.
+  const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
     const fetchEventDetail = async () => {
@@ -318,6 +321,24 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const isSelectedCategorySoldOut = activeSelectedId !== null && availabilityMap[activeSelectedId]?.available === 0;
   const isBuyDisabled = allCategoriesSoldOut || isSelectedCategorySoldOut;
 
+  // Capped at the category's live `available` count — the show's per-customer limit
+  // isn't in any response this page has, so that boundary is left to the server's 422.
+  const selectedEntry = activeSelectedId !== null ? availabilityMap[activeSelectedId] : undefined;
+  const maxQuantity = selectedEntry ? Math.max(selectedEntry.available, 1) : undefined;
+  const effectiveQuantity = maxQuantity !== undefined ? Math.min(quantity, maxQuantity) : quantity;
+
+  const incrementQuantity = () => {
+    setQuantity((q) => {
+      const current = maxQuantity !== undefined ? Math.min(q, maxQuantity) : q;
+      const next = current + 1;
+      return maxQuantity !== undefined && next > maxQuantity ? current : next;
+    });
+  };
+
+  const decrementQuantity = () => {
+    setQuantity((q) => Math.max(q - 1, 1));
+  };
+
   const eventVenue = displayEvent.venue || activeShow?.venueName || 'Madison Square Garden, NYC';
   const eventDate = displayEvent.eventDate || activeShow?.showDate || '2026-09-12';
   const eventTime = displayEvent.eventTime || activeShow?.showTime || '19:00';
@@ -509,7 +530,10 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                     <div
                       key={catId}
                       onClick={() => {
-                        if (!isSoldOut) setSelectedTicketId(catId);
+                        if (!isSoldOut) {
+                          setSelectedTicketId(catId);
+                          setQuantity(1);
+                        }
                       }}
                       aria-disabled={isSoldOut}
                       className={`border-2 border-ink-black rounded-xl p-4 flex items-center justify-between transition-all duration-150 ${
@@ -546,6 +570,53 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                   );
                 })}
               </div>
+
+              {/* Quantity control for the selected category — sold-out categories get none */}
+              {activeSelectedId !== null && !isSelectedCategorySoldOut && (
+                <div className="border-2 border-ink-black rounded-xl p-4 flex flex-col gap-3 bg-[#F9F9FC]">
+                  <div className="flex items-center justify-between">
+                    <span className="font-body font-bold text-sm text-ink-black">Quantity</span>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={decrementQuantity}
+                        disabled={effectiveQuantity <= 1}
+                        aria-label="Decrease quantity"
+                        className="w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center bg-brand-white hover:bg-brand-blue-light disabled:bg-ink-gray-30 disabled:text-ink-gray-70 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        <Minus size={16} strokeWidth={3} />
+                      </button>
+                      <span className="font-heading font-extrabold text-lg text-ink-black w-6 text-center" aria-live="polite">
+                        {effectiveQuantity}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={incrementQuantity}
+                        disabled={maxQuantity !== undefined && effectiveQuantity >= maxQuantity}
+                        aria-label="Increase quantity"
+                        className="w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center bg-brand-white hover:bg-brand-blue-light disabled:bg-ink-gray-30 disabled:text-ink-gray-70 disabled:cursor-not-allowed cursor-pointer transition-colors"
+                      >
+                        <Plus size={16} strokeWidth={3} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {selectedEntry ? (
+                    <div className="flex items-center justify-between border-t-2 border-ink-gray-30/40 pt-3">
+                      <span className="font-body text-xs font-bold text-ink-gray-70 uppercase tracking-wider">
+                        Total
+                      </span>
+                      <span className="font-heading font-extrabold text-base text-brand-blue">
+                        {selectedEntry.currency} {(selectedEntry.unitPrice * effectiveQuantity).toFixed(2)}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="font-body text-xs font-medium text-ink-gray-70">
+                      Checking availability…
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Buy Now Primary Button */}
               <button

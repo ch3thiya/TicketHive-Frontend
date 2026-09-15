@@ -14,6 +14,7 @@ declare module 'lucide-react' {
   export const EyeOff: Icon;
   export const MapPin: Icon;
   export const Plus: Icon;
+  export const Minus: Icon;
   export const Calendar: Icon;
   export const Upload: Icon;
   export const Clock: Icon;
