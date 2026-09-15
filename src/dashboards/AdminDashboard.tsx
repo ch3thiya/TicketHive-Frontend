@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { ArrowLeft, MapPin, Plus } from 'lucide-react';
 import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
+import { fetchVenues, type Venue } from '../common/venueApi';
 
 interface PendingRequest {
   requestId: string;
@@ -18,16 +19,6 @@ interface PendingRequest {
 }
 
 const API_BASE_URL = import.meta.env.VITE_IDENTITY_API_URL || '';
-
-// Hardcoded managed venues list matching the new design layout
-const INITIAL_VENUES = [
-  { name: 'Madison Square Garden', location: 'New York, NY', capacity: '20,789' },
-  { name: 'SoFi Stadium', location: 'Inglewood, CA', capacity: '70,240' },
-  { name: 'Crypto.com Arena', location: 'Los Angeles, CA', capacity: '19,068' },
-  { name: 'Red Rocks Amphitheatre', location: 'Morrison, CO', capacity: '9,525' },
-  { name: 'United Center', location: 'Chicago, IL', capacity: '23,500' },
-  { name: 'Fenway Park', location: 'Boston, MA', capacity: '37,755' }
-];
 
 export const AdminDashboard: React.FC = () => {
   const { isAuthenticated, role, apiFetch, isLoading: authLoading } = useAuth();
@@ -48,7 +39,10 @@ export const AdminDashboard: React.FC = () => {
   const [deletingRequestId, setDeletingRequestId] = useState<string | null>(null);
   const [deletingOrgName, setDeletingOrgName] = useState('');
 
-  const [venues, setVenues] = useState(INITIAL_VENUES);
+  // Managed venues states
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [venuesLoading, setVenuesLoading] = useState(true);
+  const [venuesError, setVenuesError] = useState<string | null>(null);
 
   const fetchPendingRequests = useCallback(async () => {
     try {
@@ -82,14 +76,28 @@ export const AdminDashboard: React.FC = () => {
     }
   }, [apiFetch]);
 
+  const fetchVenuesList = useCallback(async () => {
+    setVenuesLoading(true);
+    try {
+      const data = await fetchVenues(apiFetch);
+      setVenues(data);
+      setVenuesError(null);
+    } catch (err) {
+      setVenuesError(err instanceof Error ? err.message : 'Failed to load venues.');
+    } finally {
+      setVenuesLoading(false);
+    }
+  }, [apiFetch]);
+
   useEffect(() => {
     if (isAuthenticated && role === 'admin') {
       Promise.resolve().then(() => {
         fetchPendingRequests();
         fetchApprovedOrganizers();
+        fetchVenuesList();
       });
     }
-  }, [isAuthenticated, role, fetchPendingRequests, fetchApprovedOrganizers]);
+  }, [isAuthenticated, role, fetchPendingRequests, fetchApprovedOrganizers, fetchVenuesList]);
 
   const handleApprove = async (requestId: string) => {
     setActioningId(requestId);
@@ -142,16 +150,6 @@ export const AdminDashboard: React.FC = () => {
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
 
-  const handleAddVenue = () => {
-    const name = prompt('Enter venue name:');
-    if (!name) return;
-    const location = prompt('Enter venue location (e.g. Las Vegas, NV):');
-    if (!location) return;
-    const capacity = prompt('Enter capacity (e.g. 15,000):');
-    if (!capacity) return;
-
-    setVenues(prev => [...prev, { name, location, capacity }]);
-  };
 
   if (authLoading) {
     return (
@@ -326,7 +324,6 @@ export const AdminDashboard: React.FC = () => {
               Managed Venues
             </h2>
             <button
-              onClick={handleAddVenue}
               className="font-body font-bold text-[13px] text-ink-black bg-[#FFE94D] border-2.5 border-ink-black rounded-full px-4 py-2 hover:bg-[#F3DC3C] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F] flex items-center gap-1.5"
             >
               <Plus size={14} strokeWidth={3} />
@@ -334,26 +331,39 @@ export const AdminDashboard: React.FC = () => {
             </button>
           </div>
 
-          {/* Venue Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {venues.map((venue, idx) => (
-              <div 
-                key={idx}
-                className="bg-[#F9F9FC] border-2.5 border-ink-black rounded-16 p-5 flex flex-col gap-2 shadow-sm select-none hover:shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-y-px active:shadow-sm transition-all duration-150"
-              >
-                <h3 className="font-body font-bold text-[15px] text-ink-black">
-                  {venue.name}
-                </h3>
-                <div className="flex items-center gap-1 text-[13px] text-ink-gray-70">
-                  <MapPin size={13} className="text-[#FF3B3B] shrink-0" strokeWidth={2.5} />
-                  <span>{venue.location}</span>
+          {venuesLoading ? (
+            <div className="py-8 flex justify-center">
+              <div className="w-10 h-10 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          ) : venuesError ? (
+            <div className="bg-red-50 border-2 border-red-500 rounded-16 p-4 text-[#FF3B3B] font-medium text-sm">
+              {venuesError}
+            </div>
+          ) : venues.length === 0 ? (
+            <div className="border-2 border-dashed border-ink-gray-30 rounded-20 py-12 text-center">
+              <p className="font-body text-ink-gray-70 font-medium">No venues yet. Add one to get started.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {venues.map((venue) => (
+                <div
+                  key={venue.id}
+                  className="bg-[#F9F9FC] border-2.5 border-ink-black rounded-16 p-5 flex flex-col gap-2 shadow-sm select-none hover:shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-y-px active:shadow-sm transition-all duration-150"
+                >
+                  <h3 className="font-body font-bold text-[15px] text-ink-black">
+                    {venue.name}
+                  </h3>
+                  <div className="flex items-center gap-1 text-[13px] text-ink-gray-70">
+                    <MapPin size={13} className="text-[#FF3B3B] shrink-0" strokeWidth={2.5} />
+                    <span>{venue.address}</span>
+                  </div>
+                  <div className="font-body font-bold text-[13px] text-brand-blue mt-1">
+                    Capacity: {venue.capacity.toLocaleString()}
+                  </div>
                 </div>
-                <div className="font-body font-bold text-[13px] text-brand-blue mt-1">
-                  Capacity: {venue.capacity}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
       </main>
