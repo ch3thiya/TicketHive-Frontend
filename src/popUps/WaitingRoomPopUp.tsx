@@ -29,6 +29,7 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
 }) => {
   const [queueStatus, setQueueStatus] = useState<QueueStatusData | null>(null);
   const [isJoining, setIsJoining] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -175,7 +176,7 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
             </button>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center justify-center w-full">
             {isJoining && !queueStatus ? (
               <div className="flex items-center gap-2 py-4">
                 <div className="w-6 h-6 border-3 border-[#003BFF] border-t-transparent rounded-full animate-spin"></div>
@@ -184,9 +185,38 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
                 </span>
               </div>
             ) : (
-              <div className="font-heading font-extrabold text-[52px] text-[#003BFF] text-center tracking-tight leading-none mb-1">
-                #{queueStatus?.position ?? '...'}
-              </div>
+              <>
+                <div className="font-heading font-extrabold text-[52px] text-[#003BFF] text-center tracking-tight leading-none mb-4">
+                  #{queueStatus?.position ?? '...'}
+                </div>
+
+                <button
+                  onClick={async () => {
+                    setIsLeaving(true);
+                    try {
+                      await apiFetch(`${INVENTORY_API_URL}/api/inventory/shows/${showId}/waiting-room/leave`, {
+                        method: 'POST',
+                      });
+                    } catch (err) {
+                      console.error('Leave queue error:', err);
+                    } finally {
+                      setIsLeaving(false);
+                      if (onClose) onClose();
+                    }
+                  }}
+                  disabled={isLeaving}
+                  className="w-full mt-2 font-body font-bold text-sm text-[#FF3B3B] bg-brand-white border-2 border-ink-black hover:bg-rose-50 rounded-full py-2.5 px-6 shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2 select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 disabled:opacity-50"
+                >
+                  {isLeaving ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 border-2 border-[#FF3B3B] border-t-transparent rounded-full animate-spin"></div>
+                      <span>Leaving Queue…</span>
+                    </div>
+                  ) : (
+                    <span>Leave Queue</span>
+                  )}
+                </button>
+              </>
             )}
           </div>
         )}
