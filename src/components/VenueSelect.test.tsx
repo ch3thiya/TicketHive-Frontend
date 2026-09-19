@@ -10,28 +10,30 @@ const VENUES: Venue[] = [
 ];
 
 describe('VenueSelect', () => {
-  it('renders a select (not a free-text input) with a "No venue" option plus each venue by name and address', () => {
+  it('renders a venue selector button with "No venue selected" option plus each venue in popover', async () => {
+    const user = userEvent.setup();
     render(<VenueSelect venues={VENUES} value="" onChange={vi.fn()} />);
 
-    const select = screen.getByRole('combobox');
-    expect(select).toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    const trigger = screen.getByRole('button', { name: /venue/i });
+    expect(trigger).toBeInTheDocument();
+    expect(screen.getByText('No venue selected')).toBeInTheDocument();
 
-    expect(screen.getByRole('option', { name: 'No venue' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'Fenway Park — Boston, MA' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'United Center — Chicago, IL' })).toBeInTheDocument();
+    await user.click(trigger);
+
+    expect(screen.getByText('Fenway Park')).toBeInTheDocument();
+    expect(screen.getByText('United Center')).toBeInTheDocument();
   });
 
   it('preselects the venue matching the given value (edit mode)', () => {
     render(<VenueSelect venues={VENUES} value="v2" onChange={vi.fn()} />);
 
-    expect(screen.getByRole('combobox')).toHaveValue('v2');
+    expect(screen.getByText('United Center')).toBeInTheDocument();
   });
 
-  it('defaults to "No venue" selected when value is empty', () => {
+  it('defaults to "No venue selected" when value is empty', () => {
     render(<VenueSelect venues={VENUES} value="" onChange={vi.fn()} />);
 
-    expect(screen.getByRole('combobox')).toHaveValue('');
+    expect(screen.getByText('No venue selected')).toBeInTheDocument();
   });
 
   it('calls onChange with the selected venue id when the organizer picks a venue', async () => {
@@ -40,7 +42,11 @@ describe('VenueSelect', () => {
 
     render(<VenueSelect venues={VENUES} value="" onChange={onChange} />);
 
-    await user.selectOptions(screen.getByRole('combobox'), 'v1');
+    const trigger = screen.getByRole('button', { name: /venue/i });
+    await user.click(trigger);
+
+    const option = screen.getByText('Fenway Park');
+    await user.click(option);
 
     expect(onChange).toHaveBeenCalledWith('v1');
   });
@@ -50,6 +56,6 @@ describe('VenueSelect', () => {
 
     expect(screen.getByText(/couldn't load venues: network error/i)).toBeInTheDocument();
     expect(screen.getByText(/you can still save without picking one/i)).toBeInTheDocument();
-    expect(screen.getByRole('combobox')).toBeEnabled();
+    expect(screen.getByRole('button', { name: /venue/i })).toBeEnabled();
   });
 });
