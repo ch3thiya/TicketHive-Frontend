@@ -25,7 +25,6 @@ export const Input: React.FC<InputProps> = ({
   ...props
 }) => {
   const generatedId = useId();
-  const selectId = id || generatedId;
   const inputId = id || generatedId;
   const [showPassword, setShowPassword] = useState(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
