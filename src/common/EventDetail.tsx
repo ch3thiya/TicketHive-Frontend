@@ -338,10 +338,8 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   }, 0);
   const totalHeldOrSold = Math.max(0, totalCapacity - totalAvailable);
 
-  const isQueueActive = Boolean(
-    activeShow?.highDemand ||
-    (activeShow?.highDemandThreshold && activeShow.highDemandThreshold > 0 && totalHeldOrSold >= activeShow.highDemandThreshold)
-  );
+  const queueThreshold = activeShow?.highDemandThreshold || (activeShow?.highDemand ? 1 : 0);
+  const isQueueActive = queueThreshold > 0 && totalHeldOrSold >= queueThreshold;
 
   const eventVenue = displayEvent.venue || activeShow?.venueName || 'Madison Square Garden, NYC';
   const eventDate = displayEvent.eventDate || activeShow?.showDate || '2026-09-12';
@@ -580,12 +578,6 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                     return;
                   }
 
-                  // If queue mode is active and customer does not have an admission token yet, trigger waiting room popup
-                  if (isQueueActive && !admissionToken) {
-                    setIsWaitingRoomOpen(true);
-                    return;
-                  }
-
                   const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
                   const catId = getCategoryId(selectedCat, 0);
 
@@ -667,9 +659,49 @@ export const EventDetail: React.FC<EventDetailProps> = ({
           isOpen={isWaitingRoomOpen}
           showId={activeShowId}
           apiFetch={apiFetch}
-          onAdmitted={(token) => {
+          onAdmitted={async (token) => {
             setAdmissionToken(token);
             setIsWaitingRoomOpen(false);
+            
+            // Auto-trigger hold attempt using the acquired admission token
+            const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
+            const catId = getCategoryId(selectedCat, 0);
+
+            setIsCreatingHold(true);
+
+            try {
+              const res = await apiFetch(`/api/inventory/holds`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Idempotency-Key': `idemp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                  'Admission-Token': token,
+                },
+                body: JSON.stringify({
+                  showId: activeShowId,
+                  items: [{ categoryId: catId, quantity: 1 }],
+                }),
+              });
+
+              if (res.status === 201 || res.status === 200) {
+                const data = await res.json();
+                setActiveHold({
+                  holdId: data.holdId || data.id,
+                  categoryName: selectedCat.name,
+                  quantity: 1,
+                  totalPrice: selectedCat.price,
+                  expiresAt: data.expiresAt || new Date(Date.now() + 600000).toISOString(),
+                });
+              } else {
+                const err = await res.json().catch(() => null);
+                alert(err?.detail || err?.title || 'Unable to place hold on this ticket after queue admission.');
+              }
+            } catch (err) {
+              console.error('Hold error:', err);
+              alert('Network error while placing ticket hold.');
+            } finally {
+              setIsCreatingHold(false);
+            }
           }}
           onClose={() => setIsWaitingRoomOpen(false)}
         />
@@ -687,6 +719,17 @@ export const EventDetail: React.FC<EventDetailProps> = ({
           onProceedToPayment={() => {
             alert(`Proceeding to payment gateway for hold '${activeHold.holdId}'`);
             setActiveHold(null);
+          }}
+          onCancelHold={async () => {
+            try {
+              await apiFetch(`/api/inventory/holds/${activeHold.holdId}`, {
+                method: 'DELETE',
+              });
+            } catch (err) {
+              console.error('Error canceling hold:', err);
+            } finally {
+              setActiveHold(null);
+            }
           }}
           onClose={() => setActiveHold(null)}
         />

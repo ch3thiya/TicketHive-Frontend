@@ -10,6 +10,7 @@ interface HoldConfirmationPopUpProps {
   currency?: string;
   expiresAt: string;
   onProceedToPayment: () => void;
+  onCancelHold?: () => void;
   onClose: () => void;
 }
 
@@ -21,9 +22,11 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
   currency = 'USD',
   expiresAt,
   onProceedToPayment,
+  onCancelHold,
   onClose,
 }) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
+  const [isCanceling, setIsCanceling] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !expiresAt) return;
@@ -33,6 +36,11 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
       const now = new Date().getTime();
       const diff = Math.max(0, Math.floor((target - now) / 1000));
 
+      if (diff <= 0) {
+        onClose();
+        return;
+      }
+
       const mins = Math.floor(diff / 60);
       const secs = diff % 60;
       setTimeLeft(`${mins}:${secs < 10 ? '0' : ''}${secs}`);
@@ -41,7 +49,7 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [isOpen, expiresAt]);
+  }, [isOpen, expiresAt, onClose]);
 
   if (!isOpen) return null;
 
@@ -116,6 +124,33 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
         >
           <CreditCard size={20} />
           <span>Proceed to Payment</span>
+        </button>
+
+        {/* Cancel Hold Secondary Button */}
+        <button
+          onClick={async () => {
+            if (onCancelHold) {
+              setIsCanceling(true);
+              try {
+                await onCancelHold();
+              } finally {
+                setIsCanceling(false);
+              }
+            } else {
+              onClose();
+            }
+          }}
+          disabled={isCanceling}
+          className="w-full mt-3 bg-brand-white hover:bg-rose-50 text-state-error font-heading font-bold text-sm py-3 px-6 rounded-full border-2 border-ink-black shadow-[2px_2px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          {isCanceling ? (
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-state-error border-t-transparent rounded-full animate-spin"></div>
+              <span>Canceling Hold…</span>
+            </div>
+          ) : (
+            <span>Cancel Hold</span>
+          )}
         </button>
 
         {/* Secure Note */}

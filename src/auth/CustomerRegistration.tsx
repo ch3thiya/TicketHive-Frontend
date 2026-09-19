@@ -54,6 +54,7 @@ export const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             error={errors.fullName}
+            required
           />
 
           <Input
@@ -63,6 +64,7 @@ export const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             error={errors.email}
+            required
           />
 
           <Input
@@ -72,6 +74,7 @@ export const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             error={errors.password}
+            required
           />
 
           <Input
@@ -81,6 +84,7 @@ export const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             error={errors.confirmPassword}
+            required
           />
 
           <div className="self-start mt-1 mb-2 text-left">
@@ -90,6 +94,7 @@ export const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
               checked={agree}
               onChange={(e) => setAgree((e.target as HTMLInputElement).checked)}
               error={errors.agree}
+              required
             />
           </div>
 
