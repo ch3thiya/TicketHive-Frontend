@@ -8,6 +8,8 @@ import { HoldConfirmationPopUp } from '../popUps/HoldConfirmationPopUp';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
+const INVENTORY_API_URL =
+  import.meta.env.VITE_INVENTORY_API_URL || '';
 
 const AVAILABILITY_POLL_INTERVAL_MS = 3000;
 
@@ -119,6 +121,47 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   // The page always displays shows[0] today (see handoff) — this follows whichever show
   // is on screen without needing a show-switcher.
   const activeShowId = event?.shows && event.shows.length > 0 ? event.shows[0].id : null;
+
+  useEffect(() => {
+    if (!isAuthenticated || !activeShowId) return;
+
+    const restoreActiveState = async () => {
+      try {
+        // 1. Check for an active hold first
+        const holdRes = await apiFetch(`/api/inventory/holds/active?showId=${activeShowId}`);
+        if (holdRes.ok && holdRes.status === 200) {
+          const holdData = await holdRes.json();
+          const categories = event?.shows?.[0]?.ticketCategories || [
+            { id: 'cat-1', name: 'General Admission', price: 85, capacity: 1500 },
+          ];
+          const selectedCat = categories.find((c) => (c.id || c.name) === holdData.items[0]?.categoryId) || categories[0];
+          setActiveHold({
+            holdId: holdData.holdId,
+            categoryName: selectedCat.name,
+            quantity: holdData.items[0]?.quantity || 1,
+            totalPrice: (selectedCat.price || 0) * (holdData.items[0]?.quantity || 1),
+            expiresAt: holdData.expiresAt,
+          });
+          return;
+        }
+
+        // 2. Check for waiting room queue status if no active hold
+        const wrRes = await apiFetch(`${INVENTORY_API_URL}/api/inventory/shows/${activeShowId}/waiting-room/status`);
+        if (wrRes.ok) {
+          const wrData = await wrRes.json();
+          if (wrData.status === 'Waiting') {
+            setIsWaitingRoomOpen(true);
+          } else if (wrData.status === 'Admitted' && wrData.admissionToken) {
+            setAdmissionToken(wrData.admissionToken);
+          }
+        }
+      } catch (e) {
+        console.error('Error restoring active hold or queue state:', e);
+      }
+    };
+
+    restoreActiveState();
+  }, [isAuthenticated, activeShowId, apiFetch, event]);
 
   useEffect(() => {
     if (!activeShowId) {
@@ -722,13 +765,19 @@ export const EventDetail: React.FC<EventDetailProps> = ({
           }}
           onCancelHold={async () => {
             try {
-              await apiFetch(`/api/inventory/holds/${activeHold.holdId}`, {
+              const res = await apiFetch(`/api/inventory/holds/${activeHold.holdId}`, {
                 method: 'DELETE',
               });
+              if (res.ok || res.status === 204 || res.status === 404) {
+                setActiveHold(null);
+              } else {
+                const errText = await res.text().catch(() => '');
+                console.error('Failed to cancel hold:', res.status, errText);
+                alert(`Failed to cancel hold (${res.status}). If backend service was just updated, please restart Inventory service process.`);
+              }
             } catch (err) {
               console.error('Error canceling hold:', err);
-            } finally {
-              setActiveHold(null);
+              alert('Network error while canceling hold.');
             }
           }}
           onClose={() => setActiveHold(null)}

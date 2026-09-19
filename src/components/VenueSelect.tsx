@@ -44,8 +44,7 @@ export const VenueSelect: React.FC<VenueSelectProps> = ({
     if (!query) return true;
     return (
       venue.name.toLowerCase().includes(query) ||
-      venue.address.toLowerCase().includes(query) ||
-      (venue.city && venue.city.toLowerCase().includes(query))
+      venue.address.toLowerCase().includes(query)
     );
   });
 
@@ -94,7 +93,7 @@ export const VenueSelect: React.FC<VenueSelectProps> = ({
                 <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-gray-70" />
                 <input
                   type="text"
-                  placeholder="Search venue name or city..."
+                  placeholder="Search venue name or address..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full bg-ink-gray-30/40 font-body text-xs font-medium text-ink-black rounded-12 py-2 pl-9 pr-3 outline-none focus:bg-brand-white focus:border border-ink-black"
@@ -148,7 +147,7 @@ export const VenueSelect: React.FC<VenueSelectProps> = ({
                           {venue.name}
                         </span>
                         <span className={`text-xs ${isSelected ? 'text-brand-white/80' : 'text-ink-gray-70'}`}>
-                          {venue.address}{venue.city ? `, ${venue.city}` : ''}
+                          {venue.address}
                         </span>
                       </div>
                       {isSelected && <Check size={16} strokeWidth={3} className="text-brand-white shrink-0" />}

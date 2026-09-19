@@ -1008,7 +1008,7 @@ export const OrganizerDashboard: React.FC = () => {
                   key={evt.id}
                   className={`bg-brand-white border-3 border-ink-black rounded-28 p-6 lg:p-8 shadow-soft-3d flex flex-col gap-6 ${
                     isCancelled
-                      ? 'opacity-75 bg-slate-50'
+                      ? 'bg-slate-50/90'
                       : ''
                   }`}
                 >
