@@ -5,6 +5,7 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement |
   label: React.ReactNode;
   error?: string;
   type?: 'text' | 'email' | 'password' | 'tel' | 'textarea' | 'checkbox' | 'date' | 'time' | 'datetime-local';
+  required?: boolean;
 }
 
 const MONTH_NAMES = [
@@ -20,9 +21,11 @@ export const Input: React.FC<InputProps> = ({
   type = 'text',
   className = '',
   id,
+  required,
   ...props
 }) => {
   const generatedId = useId();
+  const selectId = id || generatedId;
   const inputId = id || generatedId;
   const [showPassword, setShowPassword] = useState(false);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
@@ -68,7 +71,10 @@ export const Input: React.FC<InputProps> = ({
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </span>
-          <span>{label}</span>
+          <span>
+            {label}
+            {required && <span className="text-state-error font-bold ml-1">*</span>}
+          </span>
         </label>
         {error && (
           <span className="font-body text-[13px] font-medium text-state-error mt-1.5 ml-9 text-left">
@@ -86,6 +92,7 @@ export const Input: React.FC<InputProps> = ({
       <div className={`flex flex-col gap-2 w-full text-left ${className}`}>
         <label htmlFor={inputId} className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px]">
           {label}
+          {required && <span className="text-state-error font-bold ml-1">*</span>}
         </label>
         <textarea
           id={inputId}
@@ -125,6 +132,7 @@ export const Input: React.FC<InputProps> = ({
     <div ref={containerRef} className={`flex flex-col gap-2 w-full text-left relative ${className}`}>
       <label htmlFor={inputId} className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px]">
         {label}
+        {required && <span className="text-state-error font-bold ml-1">*</span>}
       </label>
 
       {type === 'password' ? (

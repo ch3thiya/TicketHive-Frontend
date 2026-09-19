@@ -14,7 +14,8 @@ import {
   Send,
   Sliders,
   Bell,
-  Users
+  Users,
+  Trash2
 } from 'lucide-react';
 
 import { CreateEventPopUp } from '../popUps/CreateEventPopUp';
@@ -403,6 +404,49 @@ export const OrganizerDashboard: React.FC = () => {
         } catch (err) {
           console.error(err);
           showNotification('Error cancelling event.', true);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    });
+  };
+
+  // Delete Event Handler
+  const handleDeleteEvent = (eventId: string, eName: string) => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Delete Event?',
+      description: (
+        <>
+          Are you sure you want to permanently delete the event <strong className="text-ink-black">"{eName}"</strong>? This will remove all associated shows and ticket categories. This action cannot be undone.
+        </>
+      ),
+      confirmText: 'Delete Event',
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        try {
+          setIsLoading(true);
+
+          const res = await apiFetch(
+            `${CATALOG_API_URL}/api/catalog/events/${eventId}`,
+            {
+              method: 'DELETE'
+            }
+          );
+
+          if (res.ok) {
+            showNotification('Event has been permanently deleted.');
+            fetchEvents();
+          } else {
+            const errorData = await res.json().catch(() => null);
+            showNotification(
+              errorData?.detail || errorData?.message || 'Failed to delete event.',
+              true
+            );
+          }
+        } catch (err) {
+          console.error(err);
+          showNotification('Error deleting event.', true);
         } finally {
           setIsLoading(false);
         }
@@ -964,7 +1008,7 @@ export const OrganizerDashboard: React.FC = () => {
                   key={evt.id}
                   className={`bg-brand-white border-3 border-ink-black rounded-28 p-6 lg:p-8 shadow-soft-3d flex flex-col gap-6 ${
                     isCancelled
-                      ? 'opacity-75 bg-slate-50'
+                      ? 'bg-slate-50/90'
                       : ''
                   }`}
                 >
@@ -1047,6 +1091,21 @@ export const OrganizerDashboard: React.FC = () => {
                         >
                           <Ban size={13} />
                           <span>Cancel Event</span>
+                        </button>
+                      )}
+
+                      {isCancelled && (
+                        <button
+                          onClick={() =>
+                            handleDeleteEvent(
+                              evt.id,
+                              evt.name
+                            )
+                          }
+                          className="font-body font-bold text-[13px] text-white bg-[#E02F2F] hover:bg-[#b82222] border-2 border-ink-black rounded-full px-3.5 py-1.5 transition-all cursor-pointer shadow-brutal-s flex items-center gap-1.5 select-none hover:-translate-x-0.5 hover:-translate-y-0.5"
+                        >
+                          <Trash2 size={13} />
+                          <span>Delete Event</span>
                         </button>
                       )}
                     </div>
