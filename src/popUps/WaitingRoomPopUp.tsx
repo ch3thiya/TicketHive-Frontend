@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { joinQueue, fetchQueueStatus, QueueNotFoundError, type QueuePosition } from '../common/waitingRoomApi';
+import { Badge } from '../components/Badge';
+import { Button } from '../components/Button';
 
 interface WaitingRoomPopUpProps {
   isOpen: boolean;
@@ -168,11 +170,9 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
           </button>
         )}
 
-        <div className="bg-surface-yellow border-2 border-ink-black rounded-full px-5 py-1 mb-4 flex items-center justify-center">
-          <span className="font-body font-bold text-[12px] tracking-[0.4px] text-ink-black uppercase">
-            High Demand
-          </span>
-        </div>
+        <Badge variant="yellow" uppercase className="mb-4">
+          High Demand
+        </Badge>
 
         {phase === 'joining' && (
           <div className="flex flex-col items-center gap-3 py-6">
@@ -192,12 +192,9 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
               then to join.
             </p>
             {onClose && (
-              <button
-                onClick={onClose}
-                className="w-full font-body font-bold text-base text-brand-white bg-brand-blue rounded-full py-3 px-6 border-3 border-ink-black shadow-brutal-m hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer"
-              >
+              <Button onClick={onClose} className="w-full">
                 Got it
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -233,12 +230,9 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
             <p className="font-body text-sm text-ink-gray-70 text-center mb-2">
               Your turn has arrived. Select your tickets now.
             </p>
-            <button
-              onClick={onClose}
-              className="w-full font-body font-bold text-base text-brand-white bg-brand-blue rounded-full py-3 px-6 border-3 border-ink-black shadow-brutal-m hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer"
-            >
+            <Button onClick={onClose} className="w-full">
               Continue to ticket selection
-            </button>
+            </Button>
           </div>
         )}
 
@@ -251,12 +245,9 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
               Every ticket was claimed while you were waiting, and the queue has closed.
             </p>
             {onClose && (
-              <button
-                onClick={onClose}
-                className="w-full font-body font-bold text-base text-ink-black bg-brand-white rounded-full py-3 px-6 border-3 border-ink-black shadow-brutal-m hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer"
-              >
+              <Button variant="outline" onClick={onClose} className="w-full">
                 Close
-              </button>
+              </Button>
             )}
           </>
         )}
@@ -268,12 +259,9 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
             </h2>
             <p className="font-body text-sm text-state-error text-center mb-4">{errorMsg}</p>
             {onClose && (
-              <button
-                onClick={onClose}
-                className="w-full font-body font-bold text-base text-ink-black bg-brand-white rounded-full py-3 px-6 border-3 border-ink-black shadow-brutal-m hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer"
-              >
+              <Button variant="outline" onClick={onClose} className="w-full">
                 Close
-              </button>
+              </Button>
             )}
           </>
         )}
