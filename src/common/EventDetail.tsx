@@ -750,7 +750,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
           totalPrice={activeHold.totalPrice}
           expiresAt={activeHold.expiresAt}
           onProceedToPayment={() => {
-            alert(`Proceeding to payment gateway for hold '${activeHold.holdId}'`);
+            console.log(`[Checkout Flow] Initiating checkout for hold '${activeHold.holdId}'`);
             setActiveHold(null);
           }}
           onCancelHold={async () => {
