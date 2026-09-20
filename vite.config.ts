@@ -24,6 +24,14 @@ export default defineConfig({
         target: process.env.VITE_INVENTORY_API_URL || 'http://localhost:5219',
         changeOrigin: true,
       },
+      '/api/booking': {
+        target: process.env.VITE_BOOKING_API_URL || 'http://localhost:5005',
+        changeOrigin: true,
+      },
+      '/api/payment': {
+        target: process.env.VITE_PAYMENT_API_URL || 'http://localhost:5006',
+        changeOrigin: true,
+      },
     },
   },
 })
