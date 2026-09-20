@@ -30,7 +30,7 @@ interface ShowDetails {
   venueId?: string | null;
   venueName?: string | null;
   onSaleAt?: string | null;
-  highDemand?: boolean | null;
+  highDemandThreshold?: number | null;
   reminderMinutesBefore?: number | null;
   status: string;
   createdAt: string;
@@ -124,7 +124,11 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   // The page always displays shows[0] today (see handoff) — this follows whichever show
   // is on screen without needing a show-switcher.
   const activeShowId = event?.shows && event.shows.length > 0 ? event.shows[0].id : null;
-  const isGated = Boolean(event?.shows?.[0]?.highDemand);
+  // Catalog never sends a `highDemand` boolean — its ShowDetailsDto only has
+  // highDemandThreshold (int?), and this is the exact check Catalog itself uses to derive
+  // "is this show high-demand" (EventService.cs, InitializeShowStockRequest / GetSalesRulesAsync).
+  // A static config check, not the deleted live capacity comparison against ticket counts.
+  const isGated = (event?.shows?.[0]?.highDemandThreshold ?? 0) > 0;
 
   useEffect(() => {
     if (!isAuthenticated || !activeShowId) return;

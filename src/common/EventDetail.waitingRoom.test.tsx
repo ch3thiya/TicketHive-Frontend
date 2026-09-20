@@ -29,7 +29,7 @@ const GATED_EVENT = {
       showDate: '2026-12-01',
       showTime: '19:00',
       status: 'Active',
-      highDemand: true,
+      highDemandThreshold: 50,
       onSaleAt: '2026-12-01T19:00:00Z',
       createdAt: '2026-01-01T00:00:00Z',
       ticketCategories: [
@@ -53,11 +53,12 @@ function stubGatedFetch(options: {
   queueStatusResponders: Array<Response | (() => Response)>;
   joinResponse?: Response;
   holdResponse?: Response;
+  event?: unknown;
 }) {
   let statusCall = 0;
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     if (url.includes('/api/catalog/events/')) {
-      return Promise.resolve(jsonResponse(GATED_EVENT));
+      return Promise.resolve(jsonResponse(options.event ?? GATED_EVENT));
     }
     if (url.includes('/api/inventory/shows/') && url.includes('/availability')) {
       return Promise.resolve(jsonResponse({ showId: 'show-1', categories: AVAILABILITY }));
@@ -101,6 +102,38 @@ afterEach(() => {
   vi.useRealTimers();
   localStorage.clear();
   sessionStorage.clear();
+});
+
+describe('EventDetail gating derivation', () => {
+  // Catalog's real ShowDetailsDto has no `highDemand` boolean — only highDemandThreshold
+  // (int?) — and Catalog itself derives "is this show high-demand" as threshold > 0
+  // (EventService.cs). isGated must match that derivation exactly, not invent a field.
+  it('is gated when highDemandThreshold is a positive number', async () => {
+    stubGatedFetch({
+      queueStatusResponders: [jsonResponse(NOT_IN_QUEUE)],
+      event: { ...GATED_EVENT, shows: [{ ...GATED_EVENT.shows[0], highDemandThreshold: 50 }] }
+    });
+
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+
+    expect(await screen.findByRole('button', { name: /join the queue/i })).toBeInTheDocument();
+  });
+
+  it('is not gated when highDemandThreshold is null or 0', async () => {
+    for (const highDemandThreshold of [null, 0]) {
+      stubGatedFetch({
+        queueStatusResponders: [jsonResponse(NOT_IN_QUEUE)],
+        event: { ...GATED_EVENT, shows: [{ ...GATED_EVENT.shows[0], highDemandThreshold }] }
+      });
+
+      const { unmount } = render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+
+      expect(await screen.findByRole('button', { name: /^buy now/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /join the queue/i })).not.toBeInTheDocument();
+
+      unmount();
+    }
+  });
 });
 
 describe('EventDetail gated shows', () => {
