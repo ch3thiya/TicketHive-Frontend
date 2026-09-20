@@ -9,6 +9,7 @@ import { OrganizerDashboard } from './dashboards/OrganizerDashboard';
 import { Navbar } from './navigation/Navbar';
 import { Footer } from './navigation/Footer';
 import { SignUpPopUp } from './popUps/SignUpPopUp';
+import { CheckoutPage } from './pages/CheckoutPage';
 import { ArrowLeft } from 'lucide-react';
 import './App.css';
 
@@ -107,6 +108,16 @@ function App() {
 
     if (currentPath === '/organizer-dashboard') {
       return <OrganizerDashboard />;
+    }
+
+    if (currentPath.startsWith('/checkout/')) {
+      const orderId = currentPath.replace('/checkout/', '').split('?')[0];
+      return (
+        <CheckoutPage
+          orderId={orderId}
+          onNavigateHome={() => navigateTo('/')}
+        />
+      );
     }
 
     if (currentPath.startsWith('/events/')) {
