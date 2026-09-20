@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import { CheckCircle2, AlertCircle, CreditCard, Lock, ArrowLeft, RefreshCw } from 'lucide-react';
 
 const BOOKING_API_URL = import.meta.env.VITE_BOOKING_API_URL || '';
+const PAYMENT_API_URL = import.meta.env.VITE_PAYMENT_API_URL || BOOKING_API_URL;
 
 interface CheckoutPageProps {
   orderId: string;
@@ -65,7 +66,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
       setError(null);
 
       try {
-        // Fetch Order Status
+        // Fetch Order Status from Booking Service
         const statusRes = await fetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/status`);
         if (!statusRes.ok) {
           setError('Order not found or has expired.');
@@ -75,8 +76,22 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
         const statusData: OrderStatusResponse = await statusRes.json();
         setOrderStatus(statusData);
 
-        // Fetch PayHere Checkout Form Parameters
-        const checkoutRes = await apiFetch(`/api/booking/orders/${orderId}/checkout`);
+        // Fetch PayHere Checkout Form Parameters from Payment Service
+        let checkoutRes = await apiFetch(`${PAYMENT_API_URL}/api/payment/checkout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: statusData.orderId,
+            amount: statusData.totalAmount,
+            currency: statusData.currency,
+            itemsSummary: `TicketHive Order ${statusData.orderId.slice(0, 8)}`,
+          }),
+        });
+
+        if (!checkoutRes.ok) {
+          checkoutRes = await apiFetch(`/api/booking/orders/${orderId}/checkout`);
+        }
+
         if (checkoutRes.ok) {
           const checkoutData: PayHereCheckoutParams = await checkoutRes.json();
           setPayHereParams(checkoutData);
