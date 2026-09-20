@@ -10,6 +10,7 @@ interface WaitingRoomPopUpProps {
   // carries no machine-readable time, just a human message.
   saleOpensAt?: string | null;
   onAdmitted: (token: string, expiresAt: string) => void;
+  onSoldOut?: () => void;
   onClose?: () => void;
 }
 
@@ -45,6 +46,7 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
   apiFetch,
   saleOpensAt,
   onAdmitted,
+  onSoldOut,
   onClose,
 }) => {
   const [phase, setPhase] = useState<Phase>('joining');
@@ -79,6 +81,7 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
       if (status.status === 'SoldOut') {
         active = false;
         setPhase('sold-out');
+        onSoldOut?.();
         return;
       }
       setPhase('waiting');
@@ -144,7 +147,7 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
       clearScheduled();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isOpen, showId, apiFetch, onAdmitted]);
+  }, [isOpen, showId, apiFetch, onAdmitted, onSoldOut]);
 
   if (!isOpen) return null;
 

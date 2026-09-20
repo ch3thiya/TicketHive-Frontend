@@ -11,6 +11,7 @@ const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
 
 const AVAILABILITY_POLL_INTERVAL_MS = 3000;
+const ADMISSION_WARNING_SECONDS = 60;
 
 interface TicketCategory {
   id?: string;
@@ -74,6 +75,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const [admissionToken, setAdmissionToken] = useState<string | null>(null);
   const [admissionExpiresAt, setAdmissionExpiresAt] = useState<string | null>(null);
   const [admissionSecondsLeft, setAdmissionSecondsLeft] = useState<number | null>(null);
+  const [queueMessage, setQueueMessage] = useState<string | null>(null);
   const [isCreatingHold, setIsCreatingHold] = useState(false);
   const [activeHold, setActiveHold] = useState<{
     holdId: string;
@@ -243,7 +245,18 @@ export const EventDetail: React.FC<EventDetailProps> = ({
 
     const target = new Date(admissionExpiresAt).getTime();
     const tick = () => {
-      setAdmissionSecondsLeft(Math.max(0, Math.round((target - Date.now()) / 1000)));
+      const secondsLeft = Math.round((target - Date.now()) / 1000);
+      if (secondsLeft <= 0) {
+        // The turn is over — send them back to the join step rather than leaving them on
+        // a page whose Buy Now button would only come back with a 403.
+        setAdmissionToken(null);
+        setAdmissionExpiresAt(null);
+        setAdmissionSecondsLeft(null);
+        setQueueStatus(null);
+        setQueueMessage('Your turn expired. Rejoin the queue to get a new one.');
+        return;
+      }
+      setAdmissionSecondsLeft(secondsLeft);
     };
 
     tick();
@@ -576,13 +589,25 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               </h3>
 
               {admissionToken && admissionSecondsLeft !== null && (
-                <div className="flex items-center justify-between bg-emerald-50 border-2 border-ink-black rounded-16 p-3 -mt-2">
+                <div
+                  className={`flex items-center justify-between border-2 border-ink-black rounded-16 p-3 -mt-2 ${
+                    admissionSecondsLeft <= ADMISSION_WARNING_SECONDS ? 'bg-amber-50' : 'bg-emerald-50'
+                  }`}
+                >
                   <span className="font-body text-xs font-bold text-ink-black">
-                    You're in! Grab your tickets now.
+                    {admissionSecondsLeft <= ADMISSION_WARNING_SECONDS
+                      ? "Hurry — your turn expires soon!"
+                      : "You're in! Grab your tickets now."}
                   </span>
                   <span className="font-heading font-extrabold text-sm text-ink-black tracking-wider">
                     {formatCountdown(admissionSecondsLeft)} left
                   </span>
+                </div>
+              )}
+
+              {queueMessage && (
+                <div className="bg-[#FFEBEB] border-2 border-ink-black rounded-16 p-3 -mt-2">
+                  <span className="font-body text-xs font-bold text-ink-black">{queueMessage}</span>
                 </div>
               )}
 
@@ -651,6 +676,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                   }
 
                   if (isGated && !admissionToken) {
+                    setQueueMessage(null);
                     setIsWaitingRoomOpen(true);
                     return;
                   }
@@ -688,10 +714,17 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                         expiresAt: data.expiresAt || new Date(Date.now() + 600000).toISOString(),
                       });
                     } else {
-                      const err = await res.json().catch(() => null);
                       if (res.status === 403) {
-                        setIsWaitingRoomOpen(true);
+                        // Expired, wrong-show or malformed all come back as the same 403 —
+                        // the backend deliberately doesn't distinguish them, so neither do
+                        // we. Clear the stale token and send them back to the join step
+                        // rather than retrying silently.
+                        setAdmissionToken(null);
+                        setAdmissionExpiresAt(null);
+                        setQueueStatus(null);
+                        setQueueMessage('Your turn expired. Rejoin the queue to get a new one.');
                       } else {
+                        const err = await res.json().catch(() => null);
                         alert(err?.detail || err?.title || 'Unable to place hold on this ticket.');
                       }
                     }
@@ -752,6 +785,10 @@ export const EventDetail: React.FC<EventDetailProps> = ({
             setAdmissionExpiresAt(expiresAt);
             setQueueStatus('Admitted');
             setIsWaitingRoomOpen(false);
+          }}
+          onSoldOut={() => {
+            setQueueStatus('SoldOut');
+            setQueueMessage('This show sold out while you were in the queue.');
           }}
           onClose={() => setIsWaitingRoomOpen(false)}
         />
