@@ -84,6 +84,10 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     totalPrice: number;
     expiresAt: string;
   } | null>(null);
+  // Whether the confirmation is currently shown, kept separate from activeHold itself —
+  // dismissing it (the X button) only hides it, it must not make the app forget a hold
+  // already exists. Losing that would let Buy Now create a second, separate hold.
+  const [isHoldPopupOpen, setIsHoldPopupOpen] = useState(false);
 
   useEffect(() => {
     const fetchEventDetail = async () => {
@@ -150,6 +154,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
             totalPrice: (selectedCat.price || 0) * (holdData.items[0]?.quantity || 1),
             expiresAt: holdData.expiresAt,
           });
+          setIsHoldPopupOpen(true);
           return;
         }
 
@@ -685,6 +690,14 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                     return;
                   }
 
+                  if (activeHold) {
+                    // A hold already exists — reopen its confirmation rather than
+                    // creating a second, separate one (dismissing it earlier only hid
+                    // it, it never cancelled the hold).
+                    setIsHoldPopupOpen(true);
+                    return;
+                  }
+
                   const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
                   const catId = getCategoryId(selectedCat, 0);
 
@@ -717,6 +730,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                         totalPrice: selectedCat.price,
                         expiresAt: data.expiresAt || new Date(Date.now() + 600000).toISOString(),
                       });
+                      setIsHoldPopupOpen(true);
                     } else {
                       if (res.status === 403) {
                         // Expired, wrong-show or malformed all come back as the same 403 —
@@ -801,7 +815,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
       {/* Hold Confirmation Popup */}
       {activeHold && (
         <HoldConfirmationPopUp
-          isOpen={Boolean(activeHold)}
+          isOpen={isHoldPopupOpen}
           holdId={activeHold.holdId}
           categoryName={activeHold.categoryName}
           quantity={activeHold.quantity}
@@ -810,6 +824,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
           onProceedToPayment={() => {
             alert(`Proceeding to payment gateway for hold '${activeHold.holdId}'`);
             setActiveHold(null);
+            setIsHoldPopupOpen(false);
           }}
           onCancelHold={async () => {
             try {
@@ -818,6 +833,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               });
               if (res.ok || res.status === 204 || res.status === 404) {
                 setActiveHold(null);
+                setIsHoldPopupOpen(false);
               } else {
                 const errText = await res.text().catch(() => '');
                 console.error('Failed to cancel hold:', res.status, errText);
@@ -828,7 +844,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               alert('Network error while canceling hold.');
             }
           }}
-          onClose={() => setActiveHold(null)}
+          onClose={() => setIsHoldPopupOpen(false)}
         />
       )}
     </div>

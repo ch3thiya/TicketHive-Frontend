@@ -253,3 +253,72 @@ describe('EventDetail gated shows', () => {
     expect(sessionStorage.length).toBe(0);
   });
 });
+
+function holdPostCalls(fetchMock: ReturnType<typeof vi.fn>) {
+  return fetchMock.mock.calls.filter(
+    ([url, init]) => (url as string).includes('/api/inventory/holds') && (init as RequestInit | undefined)?.method === 'POST'
+  );
+}
+
+describe('EventDetail duplicate hold prevention', () => {
+  // Reported: three Active holds (quota 3) from what should have been one, each with a
+  // distinct Idempotency-Key — genuinely separate requests, not retries of one click.
+
+  it('the button is already correctly disabled for a second click while the first hold request is in flight', async () => {
+    const user = userEvent.setup();
+    let resolveHold!: (res: Response) => void;
+    const pendingHold = new Promise<Response>((resolve) => {
+      resolveHold = resolve;
+    });
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url.includes('/api/catalog/events/')) return Promise.resolve(jsonResponse(GATED_EVENT));
+      if (url.includes('/api/inventory/shows/') && url.includes('/availability')) {
+        return Promise.resolve(jsonResponse({ showId: 'show-1', categories: AVAILABILITY }));
+      }
+      if (url.includes('/api/inventory/holds/active')) return Promise.resolve(new Response(null, { status: 204 }));
+      if (url.includes('/api/inventory/holds') && init?.method === 'POST') return pendingHold;
+      if (url.includes('/api/waiting-room/queues/') && url.endsWith('/entries/me')) return Promise.resolve(jsonResponse(ADMITTED));
+      return Promise.reject(new Error(`unexpected fetch url: ${url}`));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+
+    const buyButton = await screen.findByRole('button', { name: /^buy now/i });
+    await user.click(buyButton);
+    expect(buyButton).toBeDisabled();
+
+    // A second click while the request is still pending must not be possible — the
+    // button is a real DOM `disabled` element by this point, so this click is a no-op.
+    await user.click(buyButton);
+
+    resolveHold(jsonResponse({ holdId: 'hold-1', expiresAt: '2099-01-01T00:00:00Z' }, 201));
+    await screen.findByText('Ticket Hold Confirmed!');
+
+    expect(holdPostCalls(fetchMock)).toHaveLength(1);
+  });
+
+  it('dismissing the confirmation via the X button, then pressing Buy Now again, creates a second, separate hold', async () => {
+    // This is the reported mechanism, reproduced: it is not a disabled-while-in-flight
+    // gap (that part already works, per the test above) — each click is its own fully
+    // completed, correctly-disabled request. The X close button clears the known hold
+    // locally without cancelling it server-side, so Buy Now reappears with no memory
+    // that a hold already exists, and a second click creates a genuinely separate one.
+    const user = userEvent.setup();
+    const fetchMock = stubGatedFetch({ queueStatusResponders: [jsonResponse(ADMITTED)] });
+
+    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
+
+    const buyButton = await screen.findByRole('button', { name: /^buy now/i });
+    await user.click(buyButton);
+    await screen.findByText('Ticket Hold Confirmed!');
+
+    await user.click(screen.getByRole('button', { name: /close modal/i }));
+    expect(screen.queryByText('Ticket Hold Confirmed!')).not.toBeInTheDocument();
+
+    const buyButtonAgain = await screen.findByRole('button', { name: /^buy now/i });
+    await user.click(buyButtonAgain);
+
+    expect(holdPostCalls(fetchMock)).toHaveLength(1);
+  });
+});
