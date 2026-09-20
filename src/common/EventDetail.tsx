@@ -30,7 +30,6 @@ interface ShowDetails {
   venueId?: string | null;
   venueName?: string | null;
   onSaleAt?: string | null;
-  highDemandThreshold?: number | null;
   highDemand?: boolean | null;
   reminderMinutesBefore?: number | null;
   status: string;
