@@ -2,14 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from '../components/Badge';
 import { ArrowLeft, Calendar, Clock, MapPin, ShieldAlert, ArrowRight, Lock } from 'lucide-react';
 import { fetchAvailability, AvailabilityNotFoundError, type AvailabilityEntry } from './inventoryApi';
+import { fetchQueueStatus, type QueuePositionStatus } from './waitingRoomApi';
 import { useAuth } from '../auth/AuthContext';
 import { WaitingRoomPopUp } from '../popUps/WaitingRoomPopUp';
 import { HoldConfirmationPopUp } from '../popUps/HoldConfirmationPopUp';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
-const INVENTORY_API_URL =
-  import.meta.env.VITE_INVENTORY_API_URL || '';
 
 const AVAILABILITY_POLL_INTERVAL_MS = 3000;
 
@@ -71,6 +70,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [isWaitingRoomOpen, setIsWaitingRoomOpen] = useState(false);
+  const [queueStatus, setQueueStatus] = useState<QueuePositionStatus | null>(null);
   const [admissionToken, setAdmissionToken] = useState<string | null>(null);
   const [isCreatingHold, setIsCreatingHold] = useState(false);
   const [activeHold, setActiveHold] = useState<{
@@ -120,6 +120,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   // The page always displays shows[0] today (see handoff) — this follows whichever show
   // is on screen without needing a show-switcher.
   const activeShowId = event?.shows && event.shows.length > 0 ? event.shows[0].id : null;
+  const isGated = Boolean(event?.shows?.[0]?.highDemand);
 
   useEffect(() => {
     if (!isAuthenticated || !activeShowId) return;
@@ -144,15 +145,16 @@ export const EventDetail: React.FC<EventDetailProps> = ({
           return;
         }
 
-        // 2. Check for waiting room queue status if no active hold
-        const wrRes = await apiFetch(`${INVENTORY_API_URL}/api/inventory/shows/${activeShowId}/waiting-room/status`);
-        if (wrRes.ok) {
-          const wrData = await wrRes.json();
-          if (wrData.status === 'Waiting') {
-            setIsWaitingRoomOpen(true);
-          } else if (wrData.status === 'Admitted' && wrData.admissionToken) {
-            setAdmissionToken(wrData.admissionToken);
-          }
+        // 2. Check for waiting room queue status if no active hold — only for a show the
+        // catalog has flagged as high-demand, so an ungated show never makes this call.
+        if (!isGated) return;
+
+        const status = await fetchQueueStatus(activeShowId, apiFetch);
+        setQueueStatus(status.status);
+        if (status.status === 'Waiting') {
+          setIsWaitingRoomOpen(true);
+        } else if (status.status === 'Admitted' && status.admissionToken) {
+          setAdmissionToken(status.admissionToken);
         }
       } catch (e) {
         console.error('Error restoring active hold or queue state:', e);
@@ -160,7 +162,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     };
 
     restoreActiveState();
-  }, [isAuthenticated, activeShowId, apiFetch, event]);
+  }, [isAuthenticated, activeShowId, isGated, apiFetch, event]);
 
   useEffect(() => {
     if (!activeShowId) {
@@ -602,11 +604,16 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 })}
               </div>
 
-              {/* Buy Now Primary Button */}
+              {/* Buy Now / Join the Queue Primary Button */}
               <button
                 onClick={async () => {
                   if (!isAuthenticated) {
                     login();
+                    return;
+                  }
+
+                  if (isGated && !admissionToken) {
+                    setIsWaitingRoomOpen(true);
                     return;
                   }
 
@@ -657,7 +664,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                     setIsCreatingHold(false);
                   }
                 }}
-                disabled={isBuyDisabled || isCreatingHold}
+                disabled={isBuyDisabled || isCreatingHold || (isGated && !admissionToken && queueStatus === 'SoldOut')}
                 className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 active:shadow-[1px_1px_0px_0px_#0A0A0F] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:bg-ink-gray-30 disabled:text-ink-gray-70 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-x-0 disabled:hover:translate-y-0"
               >
                 {isCreatingHold ? (
@@ -665,6 +672,13 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     <span>Holding Ticket…</span>
                   </div>
+                ) : isGated && !admissionToken && queueStatus === 'SoldOut' ? (
+                  <span>Sold Out</span>
+                ) : isGated && !admissionToken ? (
+                  <>
+                    <span>Join the Queue</span>
+                    <ArrowRight size={18} strokeWidth={2.5} />
+                  </>
                 ) : (
                   <>
                     <span>Buy Now</span>
@@ -685,55 +699,20 @@ export const EventDetail: React.FC<EventDetailProps> = ({
         </div>
       </div>
 
-      {/* Waiting Room Modal Popup matching user UI */}
+      {/* Waiting Room Modal Popup */}
       {activeShowId && (
         <WaitingRoomPopUp
           isOpen={isWaitingRoomOpen}
           showId={activeShowId}
           apiFetch={apiFetch}
-          onAdmitted={async (token) => {
+          saleOpensAt={event?.shows?.[0]?.onSaleAt}
+          onAdmitted={(token) => {
+            // Admission hands control back to ticket selection — the customer picks a
+            // category and quantity and presses Buy Now themselves, same as any other
+            // hold, just with the Admission-Token header attached.
             setAdmissionToken(token);
+            setQueueStatus('Admitted');
             setIsWaitingRoomOpen(false);
-            
-            // Auto-trigger hold attempt using the acquired admission token
-            const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
-            const catId = getCategoryId(selectedCat, 0);
-
-            setIsCreatingHold(true);
-
-            try {
-              const res = await apiFetch(`/api/inventory/holds`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Idempotency-Key': `idemp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                  'Admission-Token': token,
-                },
-                body: JSON.stringify({
-                  showId: activeShowId,
-                  items: [{ categoryId: catId, quantity: 1 }],
-                }),
-              });
-
-              if (res.status === 201 || res.status === 200) {
-                const data = await res.json();
-                setActiveHold({
-                  holdId: data.holdId || data.id,
-                  categoryName: selectedCat.name,
-                  quantity: 1,
-                  totalPrice: selectedCat.price,
-                  expiresAt: data.expiresAt || new Date(Date.now() + 600000).toISOString(),
-                });
-              } else {
-                const err = await res.json().catch(() => null);
-                alert(err?.detail || err?.title || 'Unable to place hold on this ticket after queue admission.');
-              }
-            } catch (err) {
-              console.error('Hold error:', err);
-              alert('Network error while placing ticket hold.');
-            } finally {
-              setIsCreatingHold(false);
-            }
           }}
           onClose={() => setIsWaitingRoomOpen(false)}
         />
