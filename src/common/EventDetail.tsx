@@ -72,6 +72,8 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const [isWaitingRoomOpen, setIsWaitingRoomOpen] = useState(false);
   const [queueStatus, setQueueStatus] = useState<QueuePositionStatus | null>(null);
   const [admissionToken, setAdmissionToken] = useState<string | null>(null);
+  const [admissionExpiresAt, setAdmissionExpiresAt] = useState<string | null>(null);
+  const [admissionSecondsLeft, setAdmissionSecondsLeft] = useState<number | null>(null);
   const [isCreatingHold, setIsCreatingHold] = useState(false);
   const [activeHold, setActiveHold] = useState<{
     holdId: string;
@@ -153,8 +155,9 @@ export const EventDetail: React.FC<EventDetailProps> = ({
         setQueueStatus(status.status);
         if (status.status === 'Waiting') {
           setIsWaitingRoomOpen(true);
-        } else if (status.status === 'Admitted' && status.admissionToken) {
+        } else if (status.status === 'Admitted' && status.admissionToken && status.admissionExpiresAt) {
           setAdmissionToken(status.admissionToken);
+          setAdmissionExpiresAt(status.admissionExpiresAt);
         }
       } catch (e) {
         console.error('Error restoring active hold or queue state:', e);
@@ -230,6 +233,24 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     };
   }, [activeShowId]);
 
+  // A plain countdown from the token's own expiry — never from parsing the token, which
+  // stays opaque to this code.
+  useEffect(() => {
+    if (!admissionExpiresAt) {
+      setAdmissionSecondsLeft(null);
+      return;
+    }
+
+    const target = new Date(admissionExpiresAt).getTime();
+    const tick = () => {
+      setAdmissionSecondsLeft(Math.max(0, Math.round((target - Date.now()) / 1000)));
+    };
+
+    tick();
+    const intervalId = setInterval(tick, 1000);
+    return () => clearInterval(intervalId);
+  }, [admissionExpiresAt]);
+
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return 'Sat, Sep 12, 2026';
     try {
@@ -260,6 +281,12 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     } catch {
       return timeStr;
     }
+  };
+
+  const formatCountdown = (totalSeconds: number) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   // Default fallback categories if show ticket categories are not returned from backend
@@ -548,6 +575,17 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 Select Tickets
               </h3>
 
+              {admissionToken && admissionSecondsLeft !== null && (
+                <div className="flex items-center justify-between bg-emerald-50 border-2 border-ink-black rounded-16 p-3 -mt-2">
+                  <span className="font-body text-xs font-bold text-ink-black">
+                    You're in! Grab your tickets now.
+                  </span>
+                  <span className="font-heading font-extrabold text-sm text-ink-black tracking-wider">
+                    {formatCountdown(admissionSecondsLeft)} left
+                  </span>
+                </div>
+              )}
+
               {availabilityStatus === 'error' && (
                 <p className="font-body text-xs font-medium text-ink-gray-70 -mt-3">
                   Live availability isn't available right now — ticket counts will appear once it's back.
@@ -706,11 +744,12 @@ export const EventDetail: React.FC<EventDetailProps> = ({
           showId={activeShowId}
           apiFetch={apiFetch}
           saleOpensAt={event?.shows?.[0]?.onSaleAt}
-          onAdmitted={(token) => {
+          onAdmitted={(token, expiresAt) => {
             // Admission hands control back to ticket selection — the customer picks a
             // category and quantity and presses Buy Now themselves, same as any other
             // hold, just with the Admission-Token header attached.
             setAdmissionToken(token);
+            setAdmissionExpiresAt(expiresAt);
             setQueueStatus('Admitted');
             setIsWaitingRoomOpen(false);
           }}
