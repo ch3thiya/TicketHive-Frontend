@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const { mockApiFetch } = vi.hoisted(() => ({
@@ -44,7 +44,7 @@ const EVENT = {
       showDate: '2026-12-01',
       showTime: '19:00:00',
       venueId: null,
-      onSaleAt: null,
+      onSaleAt: '2026-11-01T10:15:00Z',
       highDemandThreshold: null,
       reminderMinutesBefore: null,
       status: 'Active',
@@ -79,11 +79,19 @@ function stubApiFetch() {
     if (url.includes('/api/catalog/shows/show-1') && options?.method === 'PUT') {
       return Promise.resolve(jsonResponse({}));
     }
+    if (url.includes('/api/catalog/events/evt-1/shows') && options?.method === 'POST') {
+      return Promise.resolve(jsonResponse({}));
+    }
     return Promise.reject(new Error(`unexpected apiFetch url: ${url}`));
   });
 }
 
-function lastUpdateBody(): { categories: Array<Record<string, unknown>> } {
+interface ShowPayload {
+  categories: Array<Record<string, unknown>>;
+  onSaleAt: string | null;
+}
+
+function lastUpdateBody(): ShowPayload {
   const call = mockApiFetch.mock.calls.find(
     ([url, options]) =>
       typeof url === 'string' &&
@@ -91,6 +99,17 @@ function lastUpdateBody(): { categories: Array<Record<string, unknown>> } {
       options?.method === 'PUT'
   );
   if (!call) throw new Error('show update was never sent');
+  return JSON.parse(call[1].body as string);
+}
+
+function lastCreateShowBody(): ShowPayload {
+  const call = mockApiFetch.mock.calls.find(
+    ([url, options]) =>
+      typeof url === 'string' &&
+      url.includes('/api/catalog/events/evt-1/shows') &&
+      options?.method === 'POST'
+  );
+  if (!call) throw new Error('show create was never sent');
   return JSON.parse(call[1].body as string);
 }
 
@@ -102,6 +121,15 @@ async function openEditShowForm() {
   await userEvent.click(editButtons[editButtons.length - 1]);
 
   return screen.getByRole('button', { name: /save show changes/i }).closest('form') as HTMLElement;
+}
+
+async function openAddShowForm() {
+  render(<OrganizerDashboard />);
+
+  const addShowButton = await screen.findByRole('button', { name: /add show/i });
+  await userEvent.click(addShowButton);
+
+  return screen.getByRole('button', { name: /save show & tiers/i }).closest('form') as HTMLElement;
 }
 
 afterEach(() => {
@@ -170,5 +198,67 @@ describe('OrganizerDashboard editing an existing show', () => {
       price: 50,
       capacity: 250
     });
+  });
+});
+
+describe('OrganizerDashboard on-sale date/time field', () => {
+  it('preselects the existing show\'s on-sale value and round-trips it unchanged', async () => {
+    stubApiFetch();
+    const form = await openEditShowForm();
+
+    const onSaleInput = within(form).getByLabelText(
+      /on-sale date & time/i
+    ) as HTMLInputElement;
+
+    // EVENT.shows[0].onSaleAt is '2026-11-01T10:15:00Z'; the dashboard
+    // preselects it via `.substring(0, 16)`, which drops the offset.
+    expect(onSaleInput.value).toBe('2026-11-01T10:15');
+
+    await userEvent.click(screen.getByRole('button', { name: /save show changes/i }));
+
+    const body = await vi.waitFor(() => lastUpdateBody());
+
+    expect(body.onSaleAt).toBe(new Date('2026-11-01T10:15').toISOString());
+  });
+
+  it('sends onSaleAt as null when the field is cleared', async () => {
+    stubApiFetch();
+    const form = await openEditShowForm();
+
+    const onSaleInput = within(form).getByLabelText(/on-sale date & time/i);
+    // jsdom's datetime-local input doesn't support user-event's keystroke
+    // simulation for native picker segments, so the value is set directly.
+    fireEvent.change(onSaleInput, { target: { value: '' } });
+
+    await userEvent.click(screen.getByRole('button', { name: /save show changes/i }));
+
+    const body = await vi.waitFor(() => lastUpdateBody());
+
+    expect(body.onSaleAt).toBeNull();
+  });
+
+  it('carries a newly-set on-sale value into the create-show payload', async () => {
+    stubApiFetch();
+    const form = await openAddShowForm();
+
+    const onSaleInput = within(form).getByLabelText(/on-sale date & time/i);
+    fireEvent.change(onSaleInput, { target: { value: '2026-12-15T09:00' } });
+
+    await userEvent.click(screen.getByRole('button', { name: /save show & tiers/i }));
+
+    const body = await vi.waitFor(() => lastCreateShowBody());
+
+    expect(body.onSaleAt).toBe(new Date('2026-12-15T09:00').toISOString());
+  });
+
+  it('leaves onSaleAt as null on create when the field is never touched', async () => {
+    stubApiFetch();
+    await openAddShowForm();
+
+    await userEvent.click(screen.getByRole('button', { name: /save show & tiers/i }));
+
+    const body = await vi.waitFor(() => lastCreateShowBody());
+
+    expect(body.onSaleAt).toBeNull();
   });
 });
