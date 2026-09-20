@@ -821,10 +821,32 @@ export const EventDetail: React.FC<EventDetailProps> = ({
           quantity={activeHold.quantity}
           totalPrice={activeHold.totalPrice}
           expiresAt={activeHold.expiresAt}
-          onProceedToPayment={() => {
-            alert(`Proceeding to payment gateway for hold '${activeHold.holdId}'`);
-            setActiveHold(null);
-            setIsHoldPopupOpen(false);
+          onProceedToPayment={async () => {
+            try {
+              const res = await apiFetch(`/api/booking/orders`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Idempotency-Key': `order-idemp-${activeHold.holdId}`,
+                },
+                body: JSON.stringify({ holdId: activeHold.holdId }),
+              });
+
+              if (res.ok || res.status === 201 || res.status === 200) {
+                const orderData = await res.json();
+                const orderId = orderData.orderId || orderData.id;
+                setActiveHold(null);
+                setIsHoldPopupOpen(false);
+                window.history.pushState({}, '', `/checkout/${orderId}`);
+                window.dispatchEvent(new PopStateEvent('popstate'));
+              } else {
+                const err = await res.json().catch(() => null);
+                alert(err?.detail || err?.title || 'Unable to initialize order checkout.');
+              }
+            } catch (err) {
+              console.error('Order creation error:', err);
+              alert('Network error while initializing order checkout.');
+            }
           }}
           onCancelHold={async () => {
             try {

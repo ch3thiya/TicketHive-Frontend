@@ -19,7 +19,7 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
   categoryName,
   quantity,
   totalPrice,
-  currency = 'USD',
+  currency = 'LKR',
   expiresAt,
   onProceedToPayment,
   onCancelHold,
@@ -100,7 +100,7 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
               TOTAL AMOUNT
             </span>
             <span className="font-heading font-extrabold text-lg text-brand-blue">
-              ${totalPrice.toFixed(2)} {currency !== 'USD' ? currency : ''}
+              Rs. {totalPrice.toFixed(2)} {currency}
             </span>
           </div>
 
