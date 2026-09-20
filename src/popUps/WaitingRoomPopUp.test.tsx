@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, act } from '@testing-library/react';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import { WaitingRoomPopUp } from './WaitingRoomPopUp';
 import type { QueuePosition } from '../common/waitingRoomApi';
 
@@ -82,6 +82,31 @@ describe('WaitingRoomPopUp', () => {
 
     expect(await screen.findByText('#248')).toBeInTheDocument();
     expect(screen.getByText(/high demand/i)).toBeInTheDocument();
+  });
+
+  it('joins exactly once even when the parent re-renders with new onAdmitted/onSoldOut closures', async () => {
+    // EventDetail passes these as fresh inline arrow functions on every render (its own
+    // availability polling alone re-renders it every few seconds) — a parent re-render
+    // must never tear the join/poll effect down and re-join mid-wait.
+    const apiFetch = stubApiFetch(jsonResponse({ showId: 'show-1', queueNumber: 300, joinedAt: '2026-09-20T09:00:00Z' }), [
+      jsonResponse(WAITING_WITH_POSITION)
+    ]);
+
+    const { rerender } = render(
+      <WaitingRoomPopUp isOpen showId="show-1" apiFetch={apiFetch} onAdmitted={() => {}} onSoldOut={() => {}} />
+    );
+    await screen.findByText('#248');
+
+    for (let i = 0; i < 5; i++) {
+      rerender(
+        <WaitingRoomPopUp isOpen showId="show-1" apiFetch={apiFetch} onAdmitted={() => {}} onSoldOut={() => {}} />
+      );
+    }
+
+    await waitFor(() => {
+      const joinCalls = apiFetch.mock.calls.filter(([, options]) => (options as RequestInit | undefined)?.method === 'POST');
+      expect(joinCalls).toHaveLength(1);
+    });
   });
 
   it('shows the pre-queue message with the sale time when there is no number yet', async () => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { joinQueue, fetchQueueStatus, QueueNotFoundError, type QueuePosition } from '../common/waitingRoomApi';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
@@ -55,6 +55,17 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
   const [queueStatus, setQueueStatus] = useState<QueuePosition | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // EventDetail passes onAdmitted/onSoldOut as fresh inline closures on every render (its
+  // own availability polling alone re-renders it every few seconds). Keeping them out of
+  // the join/poll effect's dependencies — reading the latest via a ref instead — means a
+  // parent re-render never tears the effect down and re-joins the queue mid-wait.
+  const onAdmittedRef = useRef(onAdmitted);
+  const onSoldOutRef = useRef(onSoldOut);
+  useEffect(() => {
+    onAdmittedRef.current = onAdmitted;
+    onSoldOutRef.current = onSoldOut;
+  }, [onAdmitted, onSoldOut]);
+
   useEffect(() => {
     if (!isOpen || !showId) return;
 
@@ -77,13 +88,13 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
       if (status.status === 'Admitted' && status.admissionToken && status.admissionExpiresAt) {
         active = false;
         setPhase('admitted');
-        onAdmitted(status.admissionToken, status.admissionExpiresAt);
+        onAdmittedRef.current(status.admissionToken, status.admissionExpiresAt);
         return;
       }
       if (status.status === 'SoldOut') {
         active = false;
         setPhase('sold-out');
-        onSoldOut?.();
+        onSoldOutRef.current?.();
         return;
       }
       setPhase('waiting');
@@ -149,7 +160,7 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
       clearScheduled();
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isOpen, showId, apiFetch, onAdmitted, onSoldOut]);
+  }, [isOpen, showId, apiFetch]);
 
   if (!isOpen) return null;
 
