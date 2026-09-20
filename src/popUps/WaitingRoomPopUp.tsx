@@ -13,7 +13,16 @@ interface WaitingRoomPopUpProps {
   onClose?: () => void;
 }
 
-type Phase = 'joining' | 'not-open' | 'waiting' | 'admitted' | 'error';
+type Phase = 'joining' | 'not-open' | 'waiting' | 'admitted' | 'sold-out' | 'error';
+
+// Everyone in a queue polls at once, so a fixed tick produces a spike on every server at
+// the same moment. Jittering each interval independently spreads that load out instead.
+const POLL_MIN_MS = 3000;
+const POLL_MAX_MS = 6000;
+
+function jitterDelay(): number {
+  return POLL_MIN_MS + Math.random() * (POLL_MAX_MS - POLL_MIN_MS);
+}
 
 function formatDateTime(iso?: string | null): string {
   if (!iso) return 'soon';
@@ -46,27 +55,78 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
     if (!isOpen || !showId) return;
 
     let cancelled = false;
+    let joined = false;
+    // Turns false the moment a terminal status (admitted, sold out) or a hard failure is
+    // reached — polling has nothing left to check after that.
+    let active = true;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
-    const joinAndCheck = async () => {
+    const clearScheduled = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = undefined;
+      }
+    };
+
+    const applyStatus = (status: QueuePosition) => {
+      setQueueStatus(status);
+      if (status.status === 'Admitted' && status.admissionToken && status.admissionExpiresAt) {
+        active = false;
+        setPhase('admitted');
+        onAdmitted(status.admissionToken, status.admissionExpiresAt);
+        return;
+      }
+      if (status.status === 'SoldOut') {
+        active = false;
+        setPhase('sold-out');
+        return;
+      }
+      setPhase('waiting');
+    };
+
+    const poll = async () => {
+      if (cancelled || !active || document.visibilityState !== 'visible') return;
+      try {
+        const status = await fetchQueueStatus(showId, apiFetch);
+        if (cancelled) return;
+        applyStatus(status);
+      } catch {
+        // A single failed poll keeps the last known position on screen; the next
+        // jittered tick tries again rather than surfacing a transient error.
+      } finally {
+        if (!cancelled && active) {
+          timeoutId = setTimeout(poll, jitterDelay());
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (joined && active && !timeoutId) poll();
+      } else {
+        clearScheduled();
+      }
+    };
+
+    const start = async () => {
       setPhase('joining');
       setErrorMsg(null);
 
       try {
         await joinQueue(showId, apiFetch);
         if (cancelled) return;
+        joined = true;
 
         const status = await fetchQueueStatus(showId, apiFetch);
         if (cancelled) return;
+        applyStatus(status);
 
-        setQueueStatus(status);
-        if (status.status === 'Admitted' && status.admissionToken && status.admissionExpiresAt) {
-          setPhase('admitted');
-          onAdmitted(status.admissionToken, status.admissionExpiresAt);
-        } else {
-          setPhase('waiting');
+        if (!cancelled && active && document.visibilityState === 'visible') {
+          timeoutId = setTimeout(poll, jitterDelay());
         }
       } catch (err) {
         if (cancelled) return;
+        active = false;
         if (err instanceof QueueNotFoundError) {
           setPhase('not-open');
         } else {
@@ -76,10 +136,13 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
       }
     };
 
-    joinAndCheck();
+    start();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       cancelled = true;
+      clearScheduled();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isOpen, showId, apiFetch, onAdmitted]);
 
@@ -174,6 +237,25 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
               Continue to ticket selection
             </button>
           </div>
+        )}
+
+        {phase === 'sold-out' && (
+          <>
+            <h2 className="font-heading font-extrabold text-[26px] text-ink-black text-center mb-2 leading-snug">
+              This show sold out
+            </h2>
+            <p className="font-body text-sm text-ink-gray-70 text-center mb-6">
+              Every ticket was claimed while you were waiting, and the queue has closed.
+            </p>
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="w-full font-body font-bold text-base text-ink-black bg-brand-white rounded-full py-3 px-6 border-3 border-ink-black shadow-brutal-m hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer"
+              >
+                Close
+              </button>
+            )}
+          </>
         )}
 
         {phase === 'error' && (
