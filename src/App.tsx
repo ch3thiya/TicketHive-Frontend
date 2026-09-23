@@ -10,6 +10,7 @@ import { Navbar } from './navigation/Navbar';
 import { Footer } from './navigation/Footer';
 import { SignUpPopUp } from './popUps/SignUpPopUp';
 import { CheckoutPage } from './pages/CheckoutPage';
+import { MyTicketsPage } from './pages/MyTicketsPage';
 import { ArrowLeft } from 'lucide-react';
 import './App.css';
 
@@ -108,6 +109,14 @@ function App() {
 
     if (currentPath === '/organizer-dashboard') {
       return <OrganizerDashboard />;
+    }
+
+    if (currentPath === '/my-tickets') {
+      return (
+        <MyTicketsPage
+          onNavigateHome={() => navigateTo('/')}
+        />
+      );
     }
 
     if (currentPath.startsWith('/checkout/')) {

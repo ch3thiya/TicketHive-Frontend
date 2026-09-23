@@ -220,7 +220,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
             Payment Successful!
           </h2>
           <p className="font-body text-ink-gray-70 text-sm mb-6 max-w-sm">
-            Your payment of <strong className="text-ink-black font-bold">Rs. {orderStatus.totalAmount.toFixed(2)} {orderStatus.currency}</strong> was processed successfully.
+            Your payment of <strong className="text-ink-black font-bold">Rs. {orderStatus.totalAmount.toFixed(2)} {orderStatus.currency}</strong> was processed successfully and your e-tickets have been issued!
           </p>
           <div className="w-full bg-[#F9F9FF] border-2 border-ink-black rounded-24 p-4 mb-6 text-left">
             <div className="flex justify-between py-1 text-sm border-b border-ink-gray-30">
@@ -229,12 +229,23 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
             </div>
             <div className="flex justify-between py-1 text-sm">
               <span className="font-bold text-ink-gray-70">Status:</span>
-              <span className="font-bold text-emerald-600">CONFIRMED</span>
+              <span className="font-bold text-emerald-600">CONFIRMED & ISSUED</span>
             </div>
           </div>
+          
+          <button
+            onClick={() => {
+              window.history.pushState({}, '', '/my-tickets');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+            className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer mb-3 flex items-center justify-center gap-2"
+          >
+            <span>View My Tickets 🎟️</span>
+          </button>
+          
           <button
             onClick={onNavigateHome}
-            className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer"
+            className="w-full bg-brand-white hover:bg-[#F9F9FF] text-ink-black font-heading font-bold text-sm py-2.5 px-6 rounded-full border-2 border-ink-black shadow-[2px_2px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all cursor-pointer"
           >
             Explore More Events
           </button>

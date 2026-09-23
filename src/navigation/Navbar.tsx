@@ -111,6 +111,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   Dashboard
                 </button>
               )}
+
+              <button
+                onClick={() => {
+                  window.history.pushState({}, '', '/my-tickets');
+                  window.dispatchEvent(new PopStateEvent('popstate'));
+                }}
+                className="font-body font-bold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors cursor-pointer mr-2 select-none flex items-center gap-1.5"
+              >
+                <span>🎫 My Tickets</span>
+              </button>
               
               <button
                 onClick={logout}
