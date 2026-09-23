@@ -1482,6 +1482,8 @@ export const OrganizerDashboard: React.FC = () => {
         setShowVenueId={setShowVenueId}
         venues={venues}
         venuesError={venuesError}
+        showOnSaleAt={showOnSaleAt}
+        setShowOnSaleAt={setShowOnSaleAt}
         showHighDemandThreshold={showHighDemandThreshold}
         setShowHighDemandThreshold={setShowHighDemandThreshold}
         showCategories={showCategories}
@@ -1504,6 +1506,8 @@ export const OrganizerDashboard: React.FC = () => {
         setShowVenueId={setShowVenueId}
         venues={venues}
         venuesError={venuesError}
+        showOnSaleAt={showOnSaleAt}
+        setShowOnSaleAt={setShowOnSaleAt}
         showHighDemandThreshold={showHighDemandThreshold}
         setShowHighDemandThreshold={setShowHighDemandThreshold}
         showCategories={showCategories}
