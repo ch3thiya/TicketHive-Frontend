@@ -24,8 +24,6 @@ interface AddShowPopUpProps {
   setShowVenueId: (val: string) => void;
   venues: Venue[];
   venuesError?: string | null;
-  showOnSaleAt: string;
-  setShowOnSaleAt: (val: string) => void;
   showHighDemandThreshold: string;
   setShowHighDemandThreshold: (val: string) => void;
   showCategories: TicketCategoryInput[];
@@ -48,8 +46,6 @@ export const AddShowPopUp: React.FC<AddShowPopUpProps> = ({
   setShowVenueId,
   venues,
   venuesError,
-  showOnSaleAt,
-  setShowOnSaleAt,
   showHighDemandThreshold,
   setShowHighDemandThreshold,
   showCategories,
@@ -102,14 +98,14 @@ export const AddShowPopUp: React.FC<AddShowPopUpProps> = ({
           </div>
 
           {/* Show Meta */}
-          <VenueSelect
-            venues={venues}
-            value={showVenueId}
-            onChange={setShowVenueId}
-            error={venuesError}
-          />
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <VenueSelect
+              venues={venues}
+              value={showVenueId}
+              onChange={setShowVenueId}
+              error={venuesError}
+            />
+
             <Input
               label="High Demand Threshold (Queue trigger)"
               type="text"
@@ -117,22 +113,6 @@ export const AddShowPopUp: React.FC<AddShowPopUpProps> = ({
               value={showHighDemandThreshold}
               onChange={(e) => setShowHighDemandThreshold(e.target.value)}
             />
-
-            <div className="flex flex-col gap-2 w-full text-left">
-              <label
-                htmlFor="add-show-on-sale-at"
-                className="font-body font-semibold text-[14px] text-ink-black tracking-[0.2px]"
-              >
-                On-Sale Date & Time (Optional)
-              </label>
-              <input
-                id="add-show-on-sale-at"
-                type="datetime-local"
-                value={showOnSaleAt}
-                onChange={(e) => setShowOnSaleAt(e.target.value)}
-                className="font-body text-[15px] font-normal text-ink-black bg-brand-white border-3 border-ink-black rounded-16 py-3.5 px-4 w-full outline-none transition-all duration-150 ease-in-out placeholder-ink-gray-70 focus:border-brand-blue focus:shadow-brutal-s"
-              />
-            </div>
           </div>
 
           <hr className="border-ink-gray-30" />
