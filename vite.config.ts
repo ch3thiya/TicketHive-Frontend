@@ -34,6 +34,10 @@ export default defineConfig({
         target: process.env.VITE_PAYMENT_API_URL || 'http://localhost:5006',
         changeOrigin: true,
       },
+      '/api/waiting-room': {
+        target: process.env.VITE_WAITING_ROOM_API_URL || 'http://localhost:5231',
+        changeOrigin: true,
+      },
     },
   },
 })

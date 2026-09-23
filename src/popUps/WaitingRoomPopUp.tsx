@@ -42,32 +42,29 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
       setErrorMsg(null);
 
       try {
-        const joinRes = await apiFetch(`${INVENTORY_API_URL}/api/inventory/shows/${showId}/waiting-room/join`, {
+        await apiFetch(`/api/waiting-room/queues/${showId}/entries`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
 
-        if (joinRes.ok) {
-          const data: QueueStatusData = await joinRes.json();
+        const statusRes = await apiFetch(`/api/waiting-room/queues/${showId}/entries/me`);
+        if (statusRes.ok) {
+          const data = await statusRes.json();
           if (!cancelled) {
-            setQueueStatus(data);
+            setQueueStatus({
+              showId,
+              customerSub: '',
+              status: data.status === 'Admitted' ? 'Admitted' : 'Waiting',
+              position: data.position ?? 1,
+              totalWaiting: data.position ?? 1,
+              admissionToken: data.admissionToken,
+            });
             if (data.status === 'Admitted' && data.admissionToken) {
               onAdmitted(data.admissionToken);
             }
           }
-        } else {
-          const statusRes = await apiFetch(`${INVENTORY_API_URL}/api/inventory/shows/${showId}/waiting-room/status`);
-          if (statusRes.ok) {
-            const data: QueueStatusData = await statusRes.json();
-            if (!cancelled) {
-              setQueueStatus(data);
-              if (data.status === 'Admitted' && data.admissionToken) {
-                onAdmitted(data.admissionToken);
-              }
-            }
-          } else if (!cancelled) {
-            setErrorMsg('Unable to join the waiting room line. Please try again.');
-          }
+        } else if (!cancelled) {
+          setErrorMsg('Unable to join the waiting room line. Please try again.');
         }
       } catch (err) {
         console.error('Waiting room error:', err);
@@ -81,11 +78,18 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
 
     const pollStatus = async () => {
       try {
-        const res = await apiFetch(`${INVENTORY_API_URL}/api/inventory/shows/${showId}/waiting-room/status`);
+        const res = await apiFetch(`/api/waiting-room/queues/${showId}/entries/me`);
         if (res.ok) {
-          const data: QueueStatusData = await res.json();
+          const data = await res.json();
           if (!cancelled) {
-            setQueueStatus(data);
+            setQueueStatus({
+              showId,
+              customerSub: '',
+              status: data.status === 'Admitted' ? 'Admitted' : 'Waiting',
+              position: data.position ?? 1,
+              totalWaiting: data.position ?? 1,
+              admissionToken: data.admissionToken,
+            });
             if (data.status === 'Admitted' && data.admissionToken) {
               onAdmitted(data.admissionToken);
             }
