@@ -15,6 +15,9 @@ interface OrderStatusResponse {
   status: 'PaymentPending' | 'Confirmed' | 'Failed' | 'Cancelled';
   totalAmount: number;
   currency: string;
+  createdAt?: string;
+  expiresAt?: string;
+  isExpired?: boolean;
   updatedAt: string;
 }
 
@@ -47,6 +50,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   const [payHereParams, setPayHereParams] = useState<PayHereCheckoutParams | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
 
   // Customer billing details for PayHere sandbox
   const [customerDetails, setCustomerDetails] = useState({
@@ -59,20 +64,68 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     country: 'Sri Lanka',
   });
 
+  const fetchOrderStatus = async () => {
+    try {
+      const res = await fetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/status`);
+      if (res.ok) {
+        const data: OrderStatusResponse = await res.json();
+        setOrderStatus(data);
+      }
+    } catch (err) {
+      console.error('Error fetching order status:', err);
+    }
+  };
+
+  const confirmAndRefreshPayment = async () => {
+    try {
+      await apiFetch(`${PAYMENT_API_URL}/api/payment/confirm-sandbox/${orderId}`, {
+        method: 'POST',
+      });
+    } catch (err) {
+      console.warn('Payment service sandbox confirm error:', err);
+    }
+
+    try {
+      await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/confirm-sandbox`, {
+        method: 'POST',
+      });
+    } catch (err) {
+      console.warn('Booking service sandbox confirm error:', err);
+    }
+
+    for (let i = 0; i < 5; i++) {
+      const res = await fetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/status`);
+      if (res.ok) {
+        const data: OrderStatusResponse = await res.json();
+        setOrderStatus(data);
+        if (data.status === 'Confirmed') {
+          break;
+        }
+      }
+      await new Promise((res) => setTimeout(res, 500));
+    }
+  };
+
   const handlePayHereCheckout = () => {
     if (!payHereParams) {
       setError('Payment parameters not loaded.');
       return;
     }
 
+    if (remainingSeconds !== null && remainingSeconds <= 0) {
+      setError('Ticket hold has expired. Payment is disabled.');
+      return;
+    }
+
     if (typeof window !== 'undefined' && window.payhere) {
       window.payhere.onCompleted = (completedOrderId: string) => {
         console.log('PayHere payment completed for order:', completedOrderId);
-        fetchOrderStatus();
+        confirmAndRefreshPayment();
       };
 
       window.payhere.onDismissed = () => {
         console.log('PayHere payment window dismissed');
+        fetchOrderStatus();
       };
 
       window.payhere.onError = (err: string) => {
@@ -107,25 +160,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     }
   };
 
-  const fetchOrderStatus = async () => {
-    try {
-      const res = await fetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/status`);
-      if (res.ok) {
-        const data: OrderStatusResponse = await res.json();
-        setOrderStatus(data);
-      }
-    } catch (err) {
-      console.error('Error fetching order status:', err);
-    }
-  };
-
   useEffect(() => {
     const fetchCheckoutDetails = async () => {
       setIsLoading(true);
       setError(null);
 
       try {
-        // Fetch Order Status from Booking Service
         const statusRes = await fetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/status`);
         if (!statusRes.ok) {
           setError('Order not found or has expired.');
@@ -135,7 +175,6 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
         const statusData: OrderStatusResponse = await statusRes.json();
         setOrderStatus(statusData);
 
-        // Fetch PayHere Checkout Form Parameters from Payment Service
         let checkoutRes = await apiFetch(`${PAYMENT_API_URL}/api/payment/checkout`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -170,6 +209,30 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     }
   }, [orderId, apiFetch]);
 
+  // Hold Timer calculation (10 minutes)
+  useEffect(() => {
+    if (!orderStatus || orderStatus.status !== 'PaymentPending') return;
+
+    const expiresAtTime = orderStatus.expiresAt
+      ? new Date(orderStatus.expiresAt).getTime()
+      : orderStatus.createdAt
+      ? new Date(orderStatus.createdAt).getTime() + 10 * 60 * 1000
+      : Date.now() + 10 * 60 * 1000;
+
+    const updateTimer = () => {
+      const diffSec = Math.floor((expiresAtTime - Date.now()) / 1000);
+      if (diffSec <= 0) {
+        setRemainingSeconds(0);
+      } else {
+        setRemainingSeconds(diffSec);
+      }
+    };
+
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [orderStatus]);
+
   // Status Polling every 2 seconds while PaymentPending
   useEffect(() => {
     if (!orderStatus || orderStatus.status !== 'PaymentPending') return;
@@ -180,6 +243,36 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
 
     return () => clearInterval(interval);
   }, [orderStatus?.status, orderId]);
+
+  // Auto-redirect countdown on hold expiration
+  const isExpiredState =
+    orderStatus?.status === 'Failed' ||
+    orderStatus?.status === 'Cancelled' ||
+    orderStatus?.isExpired ||
+    (remainingSeconds !== null && remainingSeconds <= 0);
+
+  useEffect(() => {
+    if (!isExpiredState) return;
+
+    const timer = setInterval(() => {
+      setRedirectCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          onNavigateHome();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isExpiredState, onNavigateHome]);
+
+  const formatRemainingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   if (isLoading) {
     return (
@@ -220,7 +313,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
             Payment Successful!
           </h2>
           <p className="font-body text-ink-gray-70 text-sm mb-6 max-w-sm">
-            Your payment of <strong className="text-ink-black font-bold">Rs. {orderStatus.totalAmount.toFixed(2)} {orderStatus.currency}</strong> was processed successfully.
+            Your payment of <strong className="text-ink-black font-bold">Rs. {orderStatus.totalAmount.toFixed(2)} {orderStatus.currency}</strong> was processed successfully and your e-tickets have been issued!
           </p>
           <div className="w-full bg-[#F9F9FF] border-2 border-ink-black rounded-24 p-4 mb-6 text-left">
             <div className="flex justify-between py-1 text-sm border-b border-ink-gray-30">
@@ -229,12 +322,23 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
             </div>
             <div className="flex justify-between py-1 text-sm">
               <span className="font-bold text-ink-gray-70">Status:</span>
-              <span className="font-bold text-emerald-600">CONFIRMED</span>
+              <span className="font-bold text-emerald-600">CONFIRMED & ISSUED</span>
             </div>
           </div>
+          
+          <button
+            onClick={() => {
+              window.history.pushState({}, '', '/my-tickets');
+              window.dispatchEvent(new PopStateEvent('popstate'));
+            }}
+            className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer mb-3 flex items-center justify-center gap-2"
+          >
+            <span>View My Tickets 🎟️</span>
+          </button>
+          
           <button
             onClick={onNavigateHome}
-            className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer"
+            className="w-full bg-brand-white hover:bg-[#F9F9FF] text-ink-black font-heading font-bold text-sm py-2.5 px-6 rounded-full border-2 border-ink-black shadow-[2px_2px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all cursor-pointer"
           >
             Explore More Events
           </button>
@@ -243,37 +347,53 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     );
   }
 
-  if (orderStatus.status === 'Failed' || orderStatus.status === 'Cancelled') {
+  if (isExpiredState) {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
-        <div className="w-16 h-16 rounded-full bg-rose-100 border-2 border-ink-black flex items-center justify-center text-rose-600 mb-4 shadow-brutal-s">
-          <AlertCircle size={36} />
+      <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto animate-in fade-in zoom-in duration-200">
+        <div className="w-20 h-20 rounded-full bg-rose-100 border-3 border-ink-black flex items-center justify-center text-rose-600 mb-6 shadow-brutal-s">
+          <AlertCircle size={48} strokeWidth={2.5} />
         </div>
-        <h2 className="font-heading font-extrabold text-2xl text-ink-black mb-2">Payment Failed or Cancelled</h2>
-        <p className="font-body text-ink-gray-70 mb-6">Your ticket hold was released back to availability.</p>
+        <h2 className="font-heading font-extrabold text-3xl text-ink-black mb-2">Hold Expired</h2>
+        <p className="font-body text-rose-600 font-bold text-base mb-2">Ticket is no longer available.</p>
+        <p className="font-body text-ink-gray-70 text-sm mb-6">
+          Your 10-minute ticket hold has expired and the reserved tickets have been released back to available inventory.
+        </p>
+        
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-20 px-4 py-2.5 text-xs font-bold text-amber-900 mb-6 w-full">
+          <span>Redirecting to Home in </span>
+          <span className="text-amber-700 font-extrabold text-sm">{redirectCountdown}s</span>
+        </div>
+
         <button
           onClick={onNavigateHome}
-          className="bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold px-6 py-3 rounded-full border-2 border-ink-black shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all cursor-pointer"
+          className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold px-6 py-3.5 rounded-full border-3 border-ink-black shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-center gap-2"
         >
-          Try Again
+          <ArrowLeft size={18} />
+          <span>Return to Events</span>
         </button>
       </div>
     );
-  }
+  }   
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10 w-full animate-in fade-in duration-200">
+    <div className="max-w-7xl mx-auto px-6 py-10 w-full min-h-screen animate-in fade-in duration-200">
       
       {/* Top Header */}
-      <div className="flex items-center justify-between mb-8 pb-6 border-b-2 border-ink-black">
+      <div className="flex items-center justify-between mb-8 pb-6 border-b-2 border-ink-black flex-wrap gap-4">
         <div>
           <h1 className="font-heading font-extrabold text-3xl text-ink-black">Complete Your Purchase</h1>
           <p className="font-body text-sm text-ink-gray-70 mt-1">Review details and pay securely via PayHere Gateway</p>
         </div>
-        <div className="flex items-center gap-2 bg-amber-50 border border-amber-300 rounded-full px-4 py-2 text-amber-900 text-xs font-bold">
-          <RefreshCw size={14} className="animate-spin text-amber-600" />
-          <span>Awaiting Payment Callback</span>
-        </div>
+        
+        {remainingSeconds !== null && (
+          <div className={`flex items-center gap-2 border-2 border-ink-black rounded-full px-4 py-2 text-xs font-bold shadow-brutal-s ${
+            remainingSeconds < 120 ? 'bg-rose-100 text-rose-800 border-rose-900 animate-pulse' : 'bg-amber-100 text-amber-900'
+          }`}>
+            <span className="text-base">⏱️</span>
+            <span>Hold Expires In:</span>
+            <span className="font-mono text-sm font-black">{formatRemainingTime(remainingSeconds)}</span>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
@@ -398,13 +518,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
                 <button
                   type="button"
                   onClick={handlePayHereCheckout}
-                  className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-4 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2"
+                  className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-4 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2 mb-3"
                 >
                   <CreditCard size={20} />
                   <span>Pay with PayHere</span>
                 </button>
               </div>
             )}
+
 
             <div className="flex items-center justify-center gap-1.5 text-xs text-ink-gray-70 font-body mt-2">
               <Lock size={14} className="text-emerald-600" />
