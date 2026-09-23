@@ -20,7 +20,7 @@ interface ValidationLog {
 }
 
 export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ onNavigateHome }) => {
-  const { apiFetch, role } = useAuth();
+  const { apiFetch } = useAuth();
   const [ticketCode, setTicketCode] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationLog | null>(null);
