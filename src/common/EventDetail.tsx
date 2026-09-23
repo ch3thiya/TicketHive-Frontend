@@ -81,6 +81,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     totalPrice: number;
     expiresAt: string;
   } | null>(null);
+  const [isHoldConfirmationOpen, setIsHoldConfirmationOpen] = useState(false);
 
   useEffect(() => {
     const fetchEventDetail = async () => {
@@ -142,11 +143,12 @@ export const EventDetail: React.FC<EventDetailProps> = ({
             totalPrice: (selectedCat.price || 0) * (holdData.items[0]?.quantity || 1),
             expiresAt: holdData.expiresAt,
           });
+          setIsHoldConfirmationOpen(true);
           return;
         }
 
         // 2. Check for waiting room queue status if no active hold
-        const wrRes = await apiFetch(`${INVENTORY_API_URL}/api/inventory/shows/${activeShowId}/waiting-room/status`);
+        const wrRes = await apiFetch(`/api/waiting-room/queues/${activeShowId}/entries/me`);
         if (wrRes.ok) {
           const wrData = await wrRes.json();
           if (wrData.status === 'Waiting') {
@@ -547,6 +549,26 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 Select Tickets
               </h3>
 
+              {activeHold && !isHoldConfirmationOpen && (
+                <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 flex flex-col gap-2 shadow-[2px_2px_0px_0px_#0A0A0F]">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-amber-900 font-heading font-bold text-xs uppercase">
+                      <Clock size={16} className="text-amber-600 animate-pulse" />
+                      <span>Active Ticket Hold</span>
+                    </div>
+                    <span className="font-body text-xs font-bold text-amber-800">
+                      {activeHold.categoryName} × {activeHold.quantity}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setIsHoldConfirmationOpen(true)}
+                    className="w-full mt-1 bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-xs py-2 px-4 rounded-full border border-ink-black shadow-[2px_2px_0px_0px_#0A0A0F] transition-all cursor-pointer text-center"
+                  >
+                    View Active Hold / Pay Now
+                  </button>
+                </div>
+              )}
+
               {availabilityStatus === 'error' && (
                 <p className="font-body text-xs font-medium text-ink-gray-70 -mt-3">
                   Live availability isn't available right now — ticket counts will appear once it's back.
@@ -611,6 +633,11 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                     return;
                   }
 
+                  if (activeHold) {
+                    setIsHoldConfirmationOpen(true);
+                    return;
+                  }
+
                   const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
                   const catId = getCategoryId(selectedCat, 0);
 
@@ -643,6 +670,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                         totalPrice: selectedCat.price,
                         expiresAt: data.expiresAt || new Date(Date.now() + 600000).toISOString(),
                       });
+                      setIsHoldConfirmationOpen(true);
                     } else {
                       const err = await res.json().catch(() => null);
                       if (res.status === 403) {
@@ -725,6 +753,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                   totalPrice: selectedCat.price,
                   expiresAt: data.expiresAt || new Date(Date.now() + 600000).toISOString(),
                 });
+                setIsHoldConfirmationOpen(true);
               } else {
                 const err = await res.json().catch(() => null);
                 alert(err?.detail || err?.title || 'Unable to place hold on this ticket after queue admission.');
@@ -743,7 +772,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
       {/* Hold Confirmation Popup */}
       {activeHold && (
         <HoldConfirmationPopUp
-          isOpen={Boolean(activeHold)}
+          isOpen={Boolean(activeHold) && isHoldConfirmationOpen}
           holdId={activeHold.holdId}
           categoryName={activeHold.categoryName}
           quantity={activeHold.quantity}
@@ -764,6 +793,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 const orderData = await res.json();
                 const orderId = orderData.orderId || orderData.id;
                 setActiveHold(null);
+                setIsHoldConfirmationOpen(false);
                 window.history.pushState({}, '', `/checkout/${orderId}`);
                 window.dispatchEvent(new PopStateEvent('popstate'));
               } else {
@@ -780,8 +810,16 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               const res = await apiFetch(`/api/inventory/holds/${activeHold.holdId}`, {
                 method: 'DELETE',
               });
-              if (res.ok || res.status === 204 || res.status === 404) {
+              if (res.ok || res.status === 204) {
                 setActiveHold(null);
+                setIsHoldConfirmationOpen(false);
+                if (activeShowId) {
+                  fetchAvailability(activeShowId).then((entries) => {
+                    const byCategory: Record<string, AvailabilityEntry> = {};
+                    entries.forEach((e) => { byCategory[e.categoryId] = e; });
+                    setAvailabilityMap(byCategory);
+                  }).catch(() => {});
+                }
               } else {
                 const errText = await res.text().catch(() => '');
                 console.error('Failed to cancel hold:', res.status, errText);
@@ -792,7 +830,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               alert('Network error while canceling hold.');
             }
           }}
-          onClose={() => setActiveHold(null)}
+          onClose={() => setIsHoldConfirmationOpen(false)}
         />
       )}
     </div>
