@@ -2,16 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Badge } from '../components/Badge';
 import { ArrowLeft, Calendar, Clock, MapPin, ShieldAlert, ArrowRight, Lock } from 'lucide-react';
 import { fetchAvailability, AvailabilityNotFoundError, type AvailabilityEntry } from './inventoryApi';
-import { fetchQueueStatus, type QueuePositionStatus } from './waitingRoomApi';
 import { useAuth } from '../auth/AuthContext';
 import { WaitingRoomPopUp } from '../popUps/WaitingRoomPopUp';
 import { HoldConfirmationPopUp } from '../popUps/HoldConfirmationPopUp';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
+const INVENTORY_API_URL =
+  import.meta.env.VITE_INVENTORY_API_URL || '';
 
 const AVAILABILITY_POLL_INTERVAL_MS = 3000;
-const ADMISSION_WARNING_SECONDS = 60;
 
 interface TicketCategory {
   id?: string;
@@ -31,6 +31,7 @@ interface ShowDetails {
   venueName?: string | null;
   onSaleAt?: string | null;
   highDemandThreshold?: number | null;
+  highDemand?: boolean | null;
   reminderMinutesBefore?: number | null;
   status: string;
   createdAt: string;
@@ -71,11 +72,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [isWaitingRoomOpen, setIsWaitingRoomOpen] = useState(false);
-  const [queueStatus, setQueueStatus] = useState<QueuePositionStatus | null>(null);
   const [admissionToken, setAdmissionToken] = useState<string | null>(null);
-  const [admissionExpiresAt, setAdmissionExpiresAt] = useState<string | null>(null);
-  const [admissionSecondsLeft, setAdmissionSecondsLeft] = useState<number | null>(null);
-  const [queueMessage, setQueueMessage] = useState<string | null>(null);
   const [isCreatingHold, setIsCreatingHold] = useState(false);
   const [activeHold, setActiveHold] = useState<{
     holdId: string;
@@ -84,10 +81,6 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     totalPrice: number;
     expiresAt: string;
   } | null>(null);
-  // Whether the confirmation is currently shown, kept separate from activeHold itself —
-  // dismissing it (the X button) only hides it, it must not make the app forget a hold
-  // already exists. Losing that would let Buy Now create a second, separate hold.
-  const [isHoldPopupOpen, setIsHoldPopupOpen] = useState(false);
 
   useEffect(() => {
     const fetchEventDetail = async () => {
@@ -128,11 +121,6 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   // The page always displays shows[0] today (see handoff) — this follows whichever show
   // is on screen without needing a show-switcher.
   const activeShowId = event?.shows && event.shows.length > 0 ? event.shows[0].id : null;
-  // Catalog never sends a `highDemand` boolean — its ShowDetailsDto only has
-  // highDemandThreshold (int?), and this is the exact check Catalog itself uses to derive
-  // "is this show high-demand" (EventService.cs, InitializeShowStockRequest / GetSalesRulesAsync).
-  // A static config check, not the deleted live capacity comparison against ticket counts.
-  const isGated = (event?.shows?.[0]?.highDemandThreshold ?? 0) > 0;
 
   useEffect(() => {
     if (!isAuthenticated || !activeShowId) return;
@@ -154,21 +142,18 @@ export const EventDetail: React.FC<EventDetailProps> = ({
             totalPrice: (selectedCat.price || 0) * (holdData.items[0]?.quantity || 1),
             expiresAt: holdData.expiresAt,
           });
-          setIsHoldPopupOpen(true);
           return;
         }
 
-        // 2. Check for waiting room queue status if no active hold — only for a show the
-        // catalog has flagged as high-demand, so an ungated show never makes this call.
-        if (!isGated) return;
-
-        const status = await fetchQueueStatus(activeShowId, apiFetch);
-        setQueueStatus(status.status);
-        if (status.status === 'Waiting') {
-          setIsWaitingRoomOpen(true);
-        } else if (status.status === 'Admitted' && status.admissionToken && status.admissionExpiresAt) {
-          setAdmissionToken(status.admissionToken);
-          setAdmissionExpiresAt(status.admissionExpiresAt);
+        // 2. Check for waiting room queue status if no active hold
+        const wrRes = await apiFetch(`${INVENTORY_API_URL}/api/inventory/shows/${activeShowId}/waiting-room/status`);
+        if (wrRes.ok) {
+          const wrData = await wrRes.json();
+          if (wrData.status === 'Waiting') {
+            setIsWaitingRoomOpen(true);
+          } else if (wrData.status === 'Admitted' && wrData.admissionToken) {
+            setAdmissionToken(wrData.admissionToken);
+          }
         }
       } catch (e) {
         console.error('Error restoring active hold or queue state:', e);
@@ -176,7 +161,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     };
 
     restoreActiveState();
-  }, [isAuthenticated, activeShowId, isGated, apiFetch, event]);
+  }, [isAuthenticated, activeShowId, apiFetch, event]);
 
   useEffect(() => {
     if (!activeShowId) {
@@ -244,35 +229,6 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     };
   }, [activeShowId]);
 
-  // A plain countdown from the token's own expiry — never from parsing the token, which
-  // stays opaque to this code.
-  useEffect(() => {
-    if (!admissionExpiresAt) {
-      setAdmissionSecondsLeft(null);
-      return;
-    }
-
-    const target = new Date(admissionExpiresAt).getTime();
-    const tick = () => {
-      const secondsLeft = Math.round((target - Date.now()) / 1000);
-      if (secondsLeft <= 0) {
-        // The turn is over — send them back to the join step rather than leaving them on
-        // a page whose Buy Now button would only come back with a 403.
-        setAdmissionToken(null);
-        setAdmissionExpiresAt(null);
-        setAdmissionSecondsLeft(null);
-        setQueueStatus(null);
-        setQueueMessage('Your turn expired. Rejoin the queue to get a new one.');
-        return;
-      }
-      setAdmissionSecondsLeft(secondsLeft);
-    };
-
-    tick();
-    const intervalId = setInterval(tick, 1000);
-    return () => clearInterval(intervalId);
-  }, [admissionExpiresAt]);
-
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return 'Sat, Sep 12, 2026';
     try {
@@ -303,12 +259,6 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     } catch {
       return timeStr;
     }
-  };
-
-  const formatCountdown = (totalSeconds: number) => {
-    const mins = Math.floor(totalSeconds / 60);
-    const secs = totalSeconds % 60;
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
   // Default fallback categories if show ticket categories are not returned from backend
@@ -597,29 +547,6 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 Select Tickets
               </h3>
 
-              {admissionToken && admissionSecondsLeft !== null && (
-                <div
-                  className={`flex items-center justify-between border-2 border-ink-black rounded-16 p-3 -mt-2 ${
-                    admissionSecondsLeft <= ADMISSION_WARNING_SECONDS ? 'bg-amber-50' : 'bg-emerald-50'
-                  }`}
-                >
-                  <span className="font-body text-xs font-bold text-ink-black">
-                    {admissionSecondsLeft <= ADMISSION_WARNING_SECONDS
-                      ? "Hurry — your turn expires soon!"
-                      : "You're in! Grab your tickets now."}
-                  </span>
-                  <span className="font-heading font-extrabold text-sm text-ink-black tracking-wider">
-                    {formatCountdown(admissionSecondsLeft)} left
-                  </span>
-                </div>
-              )}
-
-              {queueMessage && (
-                <div className="bg-[#FFEBEB] border-2 border-ink-black rounded-16 p-3 -mt-2">
-                  <span className="font-body text-xs font-bold text-ink-black">{queueMessage}</span>
-                </div>
-              )}
-
               {availabilityStatus === 'error' && (
                 <p className="font-body text-xs font-medium text-ink-gray-70 -mt-3">
                   Live availability isn't available right now — ticket counts will appear once it's back.
@@ -676,25 +603,11 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 })}
               </div>
 
-              {/* Buy Now / Join the Queue Primary Button */}
+              {/* Buy Now Primary Button */}
               <button
                 onClick={async () => {
                   if (!isAuthenticated) {
                     login();
-                    return;
-                  }
-
-                  if (isGated && !admissionToken) {
-                    setQueueMessage(null);
-                    setIsWaitingRoomOpen(true);
-                    return;
-                  }
-
-                  if (activeHold) {
-                    // A hold already exists — reopen its confirmation rather than
-                    // creating a second, separate one (dismissing it earlier only hid
-                    // it, it never cancelled the hold).
-                    setIsHoldPopupOpen(true);
                     return;
                   }
 
@@ -730,19 +643,11 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                         totalPrice: selectedCat.price,
                         expiresAt: data.expiresAt || new Date(Date.now() + 600000).toISOString(),
                       });
-                      setIsHoldPopupOpen(true);
                     } else {
+                      const err = await res.json().catch(() => null);
                       if (res.status === 403) {
-                        // Expired, wrong-show or malformed all come back as the same 403 —
-                        // the backend deliberately doesn't distinguish them, so neither do
-                        // we. Clear the stale token and send them back to the join step
-                        // rather than retrying silently.
-                        setAdmissionToken(null);
-                        setAdmissionExpiresAt(null);
-                        setQueueStatus(null);
-                        setQueueMessage('Your turn expired. Rejoin the queue to get a new one.');
+                        setIsWaitingRoomOpen(true);
                       } else {
-                        const err = await res.json().catch(() => null);
                         alert(err?.detail || err?.title || 'Unable to place hold on this ticket.');
                       }
                     }
@@ -753,7 +658,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                     setIsCreatingHold(false);
                   }
                 }}
-                disabled={isBuyDisabled || isCreatingHold || (isGated && !admissionToken && queueStatus === 'SoldOut')}
+                disabled={isBuyDisabled || isCreatingHold}
                 className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 active:shadow-[1px_1px_0px_0px_#0A0A0F] transition-all cursor-pointer flex items-center justify-center gap-2 disabled:bg-ink-gray-30 disabled:text-ink-gray-70 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:translate-x-0 disabled:hover:translate-y-0"
               >
                 {isCreatingHold ? (
@@ -761,13 +666,6 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     <span>Holding Ticket…</span>
                   </div>
-                ) : isGated && !admissionToken && queueStatus === 'SoldOut' ? (
-                  <span>Sold Out</span>
-                ) : isGated && !admissionToken ? (
-                  <>
-                    <span>Join the Queue</span>
-                    <ArrowRight size={18} strokeWidth={2.5} />
-                  </>
                 ) : (
                   <>
                     <span>Buy Now</span>
@@ -788,25 +686,55 @@ export const EventDetail: React.FC<EventDetailProps> = ({
         </div>
       </div>
 
-      {/* Waiting Room Modal Popup */}
+      {/* Waiting Room Modal Popup matching user UI */}
       {activeShowId && (
         <WaitingRoomPopUp
           isOpen={isWaitingRoomOpen}
           showId={activeShowId}
           apiFetch={apiFetch}
-          saleOpensAt={event?.shows?.[0]?.onSaleAt}
-          onAdmitted={(token, expiresAt) => {
-            // Admission hands control back to ticket selection — the customer picks a
-            // category and quantity and presses Buy Now themselves, same as any other
-            // hold, just with the Admission-Token header attached.
+          onAdmitted={async (token) => {
             setAdmissionToken(token);
-            setAdmissionExpiresAt(expiresAt);
-            setQueueStatus('Admitted');
             setIsWaitingRoomOpen(false);
-          }}
-          onSoldOut={() => {
-            setQueueStatus('SoldOut');
-            setQueueMessage('This show sold out while you were in the queue.');
+            
+            // Auto-trigger hold attempt using the acquired admission token
+            const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
+            const catId = getCategoryId(selectedCat, 0);
+
+            setIsCreatingHold(true);
+
+            try {
+              const res = await apiFetch(`/api/inventory/holds`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Idempotency-Key': `idemp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                  'Admission-Token': token,
+                },
+                body: JSON.stringify({
+                  showId: activeShowId,
+                  items: [{ categoryId: catId, quantity: 1 }],
+                }),
+              });
+
+              if (res.status === 201 || res.status === 200) {
+                const data = await res.json();
+                setActiveHold({
+                  holdId: data.holdId || data.id,
+                  categoryName: selectedCat.name,
+                  quantity: 1,
+                  totalPrice: selectedCat.price,
+                  expiresAt: data.expiresAt || new Date(Date.now() + 600000).toISOString(),
+                });
+              } else {
+                const err = await res.json().catch(() => null);
+                alert(err?.detail || err?.title || 'Unable to place hold on this ticket after queue admission.');
+              }
+            } catch (err) {
+              console.error('Hold error:', err);
+              alert('Network error while placing ticket hold.');
+            } finally {
+              setIsCreatingHold(false);
+            }
           }}
           onClose={() => setIsWaitingRoomOpen(false)}
         />
@@ -815,7 +743,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
       {/* Hold Confirmation Popup */}
       {activeHold && (
         <HoldConfirmationPopUp
-          isOpen={isHoldPopupOpen}
+          isOpen={Boolean(activeHold)}
           holdId={activeHold.holdId}
           categoryName={activeHold.categoryName}
           quantity={activeHold.quantity}
@@ -836,7 +764,6 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 const orderData = await res.json();
                 const orderId = orderData.orderId || orderData.id;
                 setActiveHold(null);
-                setIsHoldPopupOpen(false);
                 window.history.pushState({}, '', `/checkout/${orderId}`);
                 window.dispatchEvent(new PopStateEvent('popstate'));
               } else {
@@ -855,7 +782,6 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               });
               if (res.ok || res.status === 204 || res.status === 404) {
                 setActiveHold(null);
-                setIsHoldPopupOpen(false);
               } else {
                 const errText = await res.text().catch(() => '');
                 console.error('Failed to cancel hold:', res.status, errText);
@@ -866,7 +792,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
               alert('Network error while canceling hold.');
             }
           }}
-          onClose={() => setIsHoldPopupOpen(false)}
+          onClose={() => setActiveHold(null)}
         />
       )}
     </div>
