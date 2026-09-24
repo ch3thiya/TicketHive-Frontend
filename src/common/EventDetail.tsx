@@ -8,8 +8,6 @@ import { HoldConfirmationPopUp } from '../popUps/HoldConfirmationPopUp';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
-const INVENTORY_API_URL =
-  import.meta.env.VITE_INVENTORY_API_URL || '';
 
 const AVAILABILITY_POLL_INTERVAL_MS = 3000;
 

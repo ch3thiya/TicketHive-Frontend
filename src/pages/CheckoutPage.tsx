@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { CheckCircle2, AlertCircle, CreditCard, Lock, ArrowLeft, RefreshCw } from 'lucide-react';
+import { CheckCircle2, AlertCircle, CreditCard, Lock, ArrowLeft } from 'lucide-react';
 
 const BOOKING_API_URL = import.meta.env.VITE_BOOKING_API_URL || '';
 const PAYMENT_API_URL = import.meta.env.VITE_PAYMENT_API_URL || BOOKING_API_URL;
@@ -135,18 +135,6 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     console.log('[Checkout Debug] Dispatching Customer Name:', customerName);
 
     try {
-      console.log('[Checkout Debug] Calling Payment Service endpoint /api/payment/confirm-sandbox...');
-      const payRes = await apiFetch(`${PAYMENT_API_URL}/api/payment/confirm-sandbox/${orderId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerEmail, customerName })
-      });
-      console.log('[Checkout Debug] Payment Service response status:', payRes.status);
-    } catch (err) {
-      console.warn('[Checkout Debug] Payment service sandbox confirm error:', err);
-    }
-
-    try {
       console.log('[Checkout Debug] Calling Booking Service endpoint /api/booking/orders/confirm-sandbox...');
       const bookRes = await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/confirm-sandbox`, {
         method: 'POST',
@@ -156,6 +144,18 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
       console.log('[Checkout Debug] Booking Service response status:', bookRes.status);
     } catch (err) {
       console.warn('[Checkout Debug] Booking service sandbox confirm error:', err);
+    }
+
+    try {
+      console.log('[Checkout Debug] Calling Payment Service endpoint /api/payment/confirm-sandbox...');
+      const payRes = await apiFetch(`${PAYMENT_API_URL}/api/payment/confirm-sandbox/${orderId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerEmail, customerName })
+      });
+      console.log('[Checkout Debug] Payment Service response status:', payRes.status);
+    } catch (err) {
+      console.warn('[Checkout Debug] Payment service sandbox confirm error:', err);
     }
 
     for (let i = 0; i < 5; i++) {
@@ -172,7 +172,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     }
   };
 
-  const handlePayHereCheckout = () => {
+  const handlePayHereCheckout = async () => {
     const errors: { firstName?: string; lastName?: string; email?: string } = {};
 
     if (!customerDetails.firstName.trim()) {
@@ -196,6 +196,25 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
 
     setFormErrors({});
     setError(null);
+
+    const customerEmail = customerDetails.email.trim();
+    const customerName = `${customerDetails.firstName} ${customerDetails.lastName}`.trim();
+
+    try {
+      const contactRes = await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/contact`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerEmail, customerName }),
+      });
+      if (!contactRes.ok) {
+        setError('Unable to save your contact details for the ticket email.');
+        return;
+      }
+    } catch (err) {
+      console.error('[Checkout Debug] Failed to save customer contact:', err);
+      setError('Unable to save your contact details for the ticket email.');
+      return;
+    }
 
     if (!payHereParams) {
       setError('Payment parameters not loaded.');

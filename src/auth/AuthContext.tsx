@@ -43,7 +43,7 @@ import { useState, useCallback } from 'react';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const oidc = useOidcAuth();
-  const [dbUser, setDbUser] = useState<{ role?: string; approvalStatus?: string } | null>(null);
+  const [dbUser, setDbUser] = useState<{ role?: string; approvalStatus?: string; email?: string; fullName?: string } | null>(null);
 
   const accessToken = oidc.user?.access_token || null;
   const profile = (oidc.user?.profile as Record<string, unknown>) || {};
