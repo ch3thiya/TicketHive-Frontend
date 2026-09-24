@@ -53,11 +53,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.log("Token Claims Profile:", profile);
   }
 
-  // Extract Email
-  const email = (profile.email as string) || (profile.sub as string) || null;
+  // Helper to verify string looks like a valid email address
+  const isEmail = (val: unknown): val is string =>
+    typeof val === 'string' && val.includes('@') && val.includes('.');
+
+  // Extract Email from token claims or synced database user
+  const rawEmail = (profile.email as string)
+                || (profile.username as string)
+                || (profile.preferred_username as string)
+                || dbUser?.email
+                || (typeof profile.sub === 'string' && profile.sub.includes('@') ? profile.sub : '');
+
+  const email = isEmail(rawEmail) ? rawEmail : (isEmail(dbUser?.email) ? dbUser.email : null);
 
   // Extract Name
-  const fullName = (profile.name as string) || (profile.given_name as string) || null;
+  const givenName = (profile.given_name as string) || (profile.givenName as string) || (profile.nickname as string) || '';
+  const familyName = (profile.family_name as string) || (profile.familyName as string) || '';
+  const fullName = (profile.name as string)
+                || (profile.displayName as string)
+                || dbUser?.fullName
+                || (givenName ? `${givenName} ${familyName}`.trim() : null);
 
   // Extract custom WSO2 claim 'isapproved' (fallback to standard profile paths)
   let tokenApprovalStatus: 'pending' | 'approved' | 'rejected' | null = null;
