@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { CheckCircle2, AlertCircle, CreditCard, Lock, ArrowLeft, RefreshCw } from 'lucide-react';
+import { CheckCircle2, AlertCircle, CreditCard, Lock, ArrowLeft } from 'lucide-react';
 
 const BOOKING_API_URL = import.meta.env.VITE_BOOKING_API_URL || '';
 const PAYMENT_API_URL = import.meta.env.VITE_PAYMENT_API_URL || BOOKING_API_URL;
@@ -45,7 +45,7 @@ declare global {
 }
 
 export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateHome }) => {
-  const { apiFetch } = useAuth();
+  const { apiFetch, email: authEmail, fullName: authFullName, profile } = useAuth();
   const [orderStatus, setOrderStatus] = useState<OrderStatusResponse | null>(null);
   const [payHereParams, setPayHereParams] = useState<PayHereCheckoutParams | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,16 +53,66 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
 
-  // Customer billing details for PayHere sandbox
-  const [customerDetails, setCustomerDetails] = useState({
-    firstName: 'Customer',
-    lastName: 'User',
-    email: 'customer@tickethive.lk',
-    phone: '0771234567',
-    address: '123 Main Street',
-    city: 'Colombo',
-    country: 'Sri Lanka',
+  const isEmail = (val: unknown): val is string =>
+    typeof val === 'string' && val.includes('@') && val.includes('.');
+
+  // Customer billing details prefilled with registered user info
+  const [customerDetails, setCustomerDetails] = useState(() => {
+    const userEmail = isEmail(authEmail)
+      ? authEmail
+      : isEmail(profile?.email)
+      ? (profile.email as string)
+      : isEmail(profile?.username)
+      ? (profile.username as string)
+      : isEmail(profile?.preferred_username)
+      ? (profile.preferred_username as string)
+      : '';
+
+    let fName = (profile?.given_name as string) || (profile?.givenName as string) || '';
+    let lName = (profile?.family_name as string) || (profile?.familyName as string) || '';
+
+    if (!fName && authFullName) {
+      const parts = authFullName.trim().split(' ');
+      fName = parts[0] || '';
+      lName = parts.slice(1).join(' ') || '';
+    }
+
+    return {
+      firstName: fName,
+      lastName: lName,
+      email: userEmail,
+      phone: '',
+      address: '',
+      city: '',
+      country: 'Sri Lanka',
+    };
   });
+
+  const [formErrors, setFormErrors] = useState<{ firstName?: string; lastName?: string; email?: string }>({});
+
+  // Sync user info if auth profile loads after initial mount
+  useEffect(() => {
+    if (authEmail || authFullName) {
+      setCustomerDetails((prev) => {
+        const validAuthEmail = isEmail(authEmail) ? authEmail : prev.email;
+        let fName = (profile?.given_name as string) || prev.firstName;
+        let lName = (profile?.family_name as string) || prev.lastName;
+
+        if (!fName && authFullName && !prev.firstName) {
+          const parts = authFullName.trim().split(' ');
+          fName = parts[0] || '';
+          lName = parts.slice(1).join(' ') || '';
+        }
+
+        return {
+          ...prev,
+          firstName: fName,
+          lastName: lName,
+          email: validAuthEmail,
+        };
+      });
+    }
+  }, [authEmail, authFullName, profile]);
 
   const fetchOrderStatus = async () => {
     try {
@@ -77,20 +127,35 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   };
 
   const confirmAndRefreshPayment = async () => {
+    const customerEmail = customerDetails.email.trim();
+    const customerName = `${customerDetails.firstName} ${customerDetails.lastName}`.trim();
+
+    console.log('[Checkout Debug] Initiating sandbox payment confirmation for Order ID:', orderId);
+    console.log('[Checkout Debug] Dispatching Customer Email:', customerEmail);
+    console.log('[Checkout Debug] Dispatching Customer Name:', customerName);
+
     try {
-      await apiFetch(`${PAYMENT_API_URL}/api/payment/confirm-sandbox/${orderId}`, {
+      console.log('[Checkout Debug] Calling Booking Service endpoint /api/booking/orders/confirm-sandbox...');
+      const bookRes = await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/confirm-sandbox`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerEmail, customerName })
       });
+      console.log('[Checkout Debug] Booking Service response status:', bookRes.status);
     } catch (err) {
-      console.warn('Payment service sandbox confirm error:', err);
+      console.warn('[Checkout Debug] Booking service sandbox confirm error:', err);
     }
 
     try {
-      await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/confirm-sandbox`, {
+      console.log('[Checkout Debug] Calling Payment Service endpoint /api/payment/confirm-sandbox...');
+      const payRes = await apiFetch(`${PAYMENT_API_URL}/api/payment/confirm-sandbox/${orderId}`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerEmail, customerName })
       });
+      console.log('[Checkout Debug] Payment Service response status:', payRes.status);
     } catch (err) {
-      console.warn('Booking service sandbox confirm error:', err);
+      console.warn('[Checkout Debug] Payment service sandbox confirm error:', err);
     }
 
     for (let i = 0; i < 5; i++) {
@@ -98,6 +163,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
       if (res.ok) {
         const data: OrderStatusResponse = await res.json();
         setOrderStatus(data);
+        console.log(`[Checkout Debug] Polled order status (attempt ${i + 1}):`, data.status);
         if (data.status === 'Confirmed') {
           break;
         }
@@ -106,7 +172,50 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     }
   };
 
-  const handlePayHereCheckout = () => {
+  const handlePayHereCheckout = async () => {
+    const errors: { firstName?: string; lastName?: string; email?: string } = {};
+
+    if (!customerDetails.firstName.trim()) {
+      errors.firstName = 'First Name is required.';
+    }
+    if (!customerDetails.lastName.trim()) {
+      errors.lastName = 'Last Name is required.';
+    }
+    if (!customerDetails.email.trim()) {
+      errors.email = 'Email Address is required.';
+    } else if (!isEmail(customerDetails.email.trim())) {
+      errors.email = 'Please enter a valid email address.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setError('Please fill in all required fields (First Name, Last Name, Email) before continuing.');
+      console.warn('[Checkout Debug] Validation failed:', errors);
+      return;
+    }
+
+    setFormErrors({});
+    setError(null);
+
+    const customerEmail = customerDetails.email.trim();
+    const customerName = `${customerDetails.firstName} ${customerDetails.lastName}`.trim();
+
+    try {
+      const contactRes = await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/contact`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerEmail, customerName }),
+      });
+      if (!contactRes.ok) {
+        setError('Unable to save your contact details for the ticket email.');
+        return;
+      }
+    } catch (err) {
+      console.error('[Checkout Debug] Failed to save customer contact:', err);
+      setError('Unable to save your contact details for the ticket email.');
+      return;
+    }
+
     if (!payHereParams) {
       setError('Payment parameters not loaded.');
       return;
@@ -119,17 +228,17 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
 
     if (typeof window !== 'undefined' && window.payhere) {
       window.payhere.onCompleted = (completedOrderId: string) => {
-        console.log('PayHere payment completed for order:', completedOrderId);
+        console.log('[Checkout Debug] PayHere payment completed callback triggered for order:', completedOrderId);
         confirmAndRefreshPayment();
       };
 
       window.payhere.onDismissed = () => {
-        console.log('PayHere payment window dismissed');
+        console.log('[Checkout Debug] PayHere payment window dismissed');
         fetchOrderStatus();
       };
 
       window.payhere.onError = (err: string) => {
-        console.error('PayHere error:', err);
+        console.error('[Checkout Debug] PayHere error:', err);
         setError(`PayHere Error: ${err}`);
       };
 
@@ -144,17 +253,19 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
         amount: payHereParams.amount.toFixed(2),
         currency: payHereParams.currency,
         hash: payHereParams.hash,
-        first_name: customerDetails.firstName,
-        last_name: customerDetails.lastName,
-        email: customerDetails.email,
+        first_name: customerDetails.firstName.trim(),
+        last_name: customerDetails.lastName.trim(),
+        email: customerDetails.email.trim(),
         phone: customerDetails.phone,
         address: customerDetails.address,
         city: customerDetails.city,
         country: customerDetails.country,
       };
 
+      console.log('[Checkout Debug] Launching PayHere payment modal with config:', payment);
       window.payhere.startPayment(payment);
     } else {
+      console.log('[Checkout Debug] Submitting fallback PayHere form');
       const form = document.getElementById('payhere-checkout-form') as HTMLFormElement;
       if (form) form.submit();
     }
@@ -404,33 +515,69 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-ink-gray-70 mb-1">First Name</label>
+              <label className="block text-xs font-bold text-ink-gray-70 mb-1">
+                First Name <span className="text-rose-500 font-extrabold">*</span>
+              </label>
               <input
                 type="text"
+                required
                 value={customerDetails.firstName}
-                onChange={(e) => setCustomerDetails({ ...customerDetails, firstName: e.target.value })}
-                className="w-full border-2 border-ink-black rounded-16 px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                onChange={(e) => {
+                  setCustomerDetails({ ...customerDetails, firstName: e.target.value });
+                  if (formErrors.firstName) setFormErrors({ ...formErrors, firstName: undefined });
+                }}
+                className={`w-full border-2 rounded-16 px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 ${
+                  formErrors.firstName ? 'border-rose-500 bg-rose-50 focus:ring-rose-500' : 'border-ink-black focus:ring-brand-blue'
+                }`}
+                placeholder="John"
               />
+              {formErrors.firstName && (
+                <p className="text-rose-600 text-xs mt-1 font-semibold">{formErrors.firstName}</p>
+              )}
             </div>
             <div>
-              <label className="block text-xs font-bold text-ink-gray-70 mb-1">Last Name</label>
+              <label className="block text-xs font-bold text-ink-gray-70 mb-1">
+                Last Name <span className="text-rose-500 font-extrabold">*</span>
+              </label>
               <input
                 type="text"
+                required
                 value={customerDetails.lastName}
-                onChange={(e) => setCustomerDetails({ ...customerDetails, lastName: e.target.value })}
-                className="w-full border-2 border-ink-black rounded-16 px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                onChange={(e) => {
+                  setCustomerDetails({ ...customerDetails, lastName: e.target.value });
+                  if (formErrors.lastName) setFormErrors({ ...formErrors, lastName: undefined });
+                }}
+                className={`w-full border-2 rounded-16 px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 ${
+                  formErrors.lastName ? 'border-rose-500 bg-rose-50 focus:ring-rose-500' : 'border-ink-black focus:ring-brand-blue'
+                }`}
+                placeholder="Doe"
               />
+              {formErrors.lastName && (
+                <p className="text-rose-600 text-xs mt-1 font-semibold">{formErrors.lastName}</p>
+              )}
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-ink-gray-70 mb-1">Email Address</label>
+            <label className="block text-xs font-bold text-ink-gray-70 mb-1">
+              Email Address <span className="text-rose-500 font-extrabold">*</span>
+            </label>
             <input
               type="email"
+              required
               value={customerDetails.email}
-              onChange={(e) => setCustomerDetails({ ...customerDetails, email: e.target.value })}
-              className="w-full border-2 border-ink-black rounded-16 px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-brand-blue"
+              onChange={(e) => {
+                setCustomerDetails({ ...customerDetails, email: e.target.value });
+                if (formErrors.email) setFormErrors({ ...formErrors, email: undefined });
+              }}
+              className={`w-full border-2 rounded-16 px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 ${
+                formErrors.email ? 'border-rose-500 bg-rose-50 focus:ring-rose-500' : 'border-ink-black focus:ring-brand-blue'
+              }`}
+              placeholder="alex.johnson@example.com"
             />
+            {formErrors.email && (
+              <p className="text-rose-600 text-xs mt-1 font-semibold">{formErrors.email}</p>
+            )}
           </div>
 
           <div>

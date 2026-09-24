@@ -29,7 +29,7 @@ export const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
     setErrors(newErrors);
 
     if (Object.keys(newErrors).length === 0) {
-      alert(`Customer account created successfully for ${fullName}! 🎉`);
+      onNavigateToLogin();
     }
   };
 
