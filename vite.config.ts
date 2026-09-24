@@ -38,6 +38,11 @@ export default defineConfig({
         target: process.env.VITE_WAITING_ROOM_API_URL || 'http://localhost:5231',
         changeOrigin: true,
       },
+      '/api/notification': {
+        target: process.env.VITE_NOTIFICATION_API_URL || 'http://localhost:5007',
+        changeOrigin: true,
+      },
     },
   },
 })
+

@@ -45,7 +45,7 @@ declare global {
 }
 
 export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateHome }) => {
-  const { apiFetch } = useAuth();
+  const { apiFetch, email: authEmail, fullName: authFullName, profile } = useAuth();
   const [orderStatus, setOrderStatus] = useState<OrderStatusResponse | null>(null);
   const [payHereParams, setPayHereParams] = useState<PayHereCheckoutParams | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,16 +53,48 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
 
-  // Customer billing details for PayHere sandbox
-  const [customerDetails, setCustomerDetails] = useState({
-    firstName: 'Customer',
-    lastName: 'User',
-    email: 'customer@tickethive.lk',
-    phone: '0771234567',
-    address: '123 Main Street',
-    city: 'Colombo',
-    country: 'Sri Lanka',
+  // Customer billing details prefilled with registered user info
+  const [customerDetails, setCustomerDetails] = useState(() => {
+    let fName = (profile?.given_name as string) || '';
+    let lName = (profile?.family_name as string) || '';
+
+    if (!fName && authFullName) {
+      const parts = authFullName.trim().split(' ');
+      fName = parts[0] || 'Customer';
+      lName = parts.slice(1).join(' ') || 'User';
+    }
+
+    return {
+      firstName: fName || '',
+      lastName: lName || '',
+      email: authEmail || (profile?.email as string) || (profile?.sub as string) || 'customer@tickethive.lk',
+      phone: '',
+      address: '',
+      city: '',
+      country: 'Sri Lanka',
+    };
   });
+
+  // Sync user info if auth profile loads after initial mount
+  useEffect(() => {
+    if (authEmail || authFullName) {
+      setCustomerDetails((prev) => {
+        let fName = (profile?.given_name as string) || prev.firstName;
+        let lName = (profile?.family_name as string) || prev.lastName;
+        if ((!profile?.given_name && authFullName) && prev.firstName === 'Customer') {
+          const parts = authFullName.trim().split(' ');
+          fName = parts[0] || 'Customer';
+          lName = parts.slice(1).join(' ') || 'User';
+        }
+        return {
+          ...prev,
+          firstName: fName,
+          lastName: lName,
+          email: authEmail || prev.email,
+        };
+      });
+    }
+  }, [authEmail, authFullName, profile]);
 
   const fetchOrderStatus = async () => {
     try {
@@ -77,9 +109,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   };
 
   const confirmAndRefreshPayment = async () => {
+    const customerEmail = customerDetails.email;
+    const customerName = `${customerDetails.firstName} ${customerDetails.lastName}`.trim();
+
     try {
       await apiFetch(`${PAYMENT_API_URL}/api/payment/confirm-sandbox/${orderId}`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerEmail, customerName })
       });
     } catch (err) {
       console.warn('Payment service sandbox confirm error:', err);
@@ -88,6 +125,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     try {
       await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/confirm-sandbox`, {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerEmail, customerName })
       });
     } catch (err) {
       console.warn('Booking service sandbox confirm error:', err);

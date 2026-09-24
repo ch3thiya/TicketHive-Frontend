@@ -29,6 +29,7 @@ interface AuthContextType {
   accessToken: string | null;
   email: string | null;
   fullName: string | null;
+  profile: Record<string, unknown>;
   role: 'customer' | 'organizer' | 'admin' | null;
   approvalStatus: 'pending' | 'approved' | 'rejected' | null;
   login: () => Promise<void>;
@@ -154,6 +155,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     accessToken,
     email,
     fullName,
+    profile,
     role,
     approvalStatus,
     login,
