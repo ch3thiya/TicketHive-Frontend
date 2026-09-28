@@ -50,6 +50,7 @@ export const OrganizerRequest: React.FC = () => {
             value={orgName}
             onChange={(e) => setOrgName(e.target.value)}
             error={errors.orgName}
+            required
           />
 
           <div className="flex gap-4 w-full flex-col sm:flex-row">
@@ -61,6 +62,7 @@ export const OrganizerRequest: React.FC = () => {
               onChange={(e) => setBusinessEmail(e.target.value)}
               error={errors.businessEmail}
               className="flex-1"
+              required
             />
             <Input
               label="Phone Number"
@@ -70,6 +72,7 @@ export const OrganizerRequest: React.FC = () => {
               onChange={(e) => setPhone(e.target.value)}
               error={errors.phone}
               className="flex-1"
+              required
             />
           </div>
 
@@ -80,6 +83,7 @@ export const OrganizerRequest: React.FC = () => {
             value={eventType}
             onChange={(e) => setEventType(e.target.value)}
             error={errors.eventType}
+            required
           />
 
           <Input
@@ -89,6 +93,7 @@ export const OrganizerRequest: React.FC = () => {
             value={about}
             onChange={(e) => setAbout(e.target.value)}
             error={errors.about}
+            required
           />
 
           <Button type="submit" variant="primary" className="mt-2">

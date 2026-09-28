@@ -38,6 +38,15 @@ declare module 'lucide-react' {
   export const ArrowRight: Icon;
   export const Lock: Icon;
   export const ChevronDown: Icon;
+  export const Check: Icon;
+  export const CheckCircle2: Icon;
+  export const CreditCard: Icon;
+  export const Ticket: Icon;
+  export const QrCode: Icon;
+  export const AlertTriangle: Icon;
+  export const XCircle: Icon;
+  export const ShieldCheck: Icon;
+  export const History: Icon;
 
   export const icons: Record<string, Icon>;
 }

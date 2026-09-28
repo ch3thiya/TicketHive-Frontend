@@ -9,6 +9,9 @@ import { OrganizerDashboard } from './dashboards/OrganizerDashboard';
 import { Navbar } from './navigation/Navbar';
 import { Footer } from './navigation/Footer';
 import { SignUpPopUp } from './popUps/SignUpPopUp';
+import { CheckoutPage } from './pages/CheckoutPage';
+import { MyTicketsPage } from './pages/MyTicketsPage';
+import { TicketValidationPage } from './pages/TicketValidationPage';
 import { ArrowLeft } from 'lucide-react';
 import './App.css';
 
@@ -17,6 +20,7 @@ import { useAuth } from './auth/AuthContext';
 function App() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
+  const [isValidationOpen, setIsValidationOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const { isAuthenticated, role, login, isLoading } = useAuth();
@@ -34,6 +38,15 @@ function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  // Auto-open validation modal if ?validate= param is present
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('validate') && (role === 'organizer' || role === 'admin')) {
+      setIsValidationOpen(true);
+    }
+  }, [isAuthenticated, role]);
 
   // Redirect users on successful login based on their role
   useEffect(() => {
@@ -109,6 +122,24 @@ function App() {
       return <OrganizerDashboard />;
     }
 
+    if (currentPath === '/my-tickets') {
+      return (
+        <MyTicketsPage
+          onNavigateHome={() => navigateTo('/')}
+        />
+      );
+    }
+
+    if (currentPath.startsWith('/checkout/')) {
+      const orderId = currentPath.replace('/checkout/', '').split('?')[0];
+      return (
+        <CheckoutPage
+          orderId={orderId}
+          onNavigateHome={() => navigateTo('/')}
+        />
+      );
+    }
+
     if (currentPath.startsWith('/events/')) {
       const eventId = currentPath.replace('/events/', '').split('?')[0];
       return (
@@ -165,6 +196,7 @@ function App() {
           }}
           onLoginClick={login}
           onSignUpClick={() => setIsSignUpOpen(true)}
+          onValidateClick={() => setIsValidationOpen(true)}
           searchQuery={searchQuery}
           onSearchChange={(query) => {
             setSearchQuery(query);
@@ -201,6 +233,12 @@ function App() {
           setIsSignUpOpen(false);
           navigateTo(`/register?role=${role}`);
         }}
+      />
+      
+      {/* Ticket Validation PopUp modal */}
+      <TicketValidationPage
+        isOpen={isValidationOpen}
+        onClose={() => setIsValidationOpen(false)}
       />
     </div>
   );

@@ -194,6 +194,7 @@ export const Register: React.FC<RegisterProps> = ({
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
               error={customerErrors.fullName}
+              required
             />
 
             <Input
@@ -203,6 +204,7 @@ export const Register: React.FC<RegisterProps> = ({
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               error={customerErrors.email}
+              required
             />
 
             <Input
@@ -212,6 +214,7 @@ export const Register: React.FC<RegisterProps> = ({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               error={customerErrors.password}
+              required
             />
             <p className="text-left text-xs text-ink-gray-70 -mt-2 mb-2 font-medium">
               Password must be at least 8 characters, include at least 1 uppercase letter and 1 digit.
@@ -224,6 +227,7 @@ export const Register: React.FC<RegisterProps> = ({
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               error={customerErrors.confirmPassword}
+              required
             />
 
             <div className="self-start mt-1 mb-2 text-left">
@@ -233,6 +237,7 @@ export const Register: React.FC<RegisterProps> = ({
                 checked={agree}
                 onChange={(e) => setAgree((e.target as HTMLInputElement).checked)}
                 error={customerErrors.agree}
+                required
               />
             </div>
 
@@ -252,6 +257,7 @@ export const Register: React.FC<RegisterProps> = ({
                 onChange={(e) => setFullName(e.target.value)}
                 error={organizerErrors.fullName}
                 className="flex-1"
+                required
               />
               <Input
                 label="Business Email"
@@ -261,6 +267,7 @@ export const Register: React.FC<RegisterProps> = ({
                 onChange={(e) => setBusinessEmail(e.target.value)}
                 error={organizerErrors.businessEmail}
                 className="flex-1"
+                required
               />
             </div>
 
@@ -273,6 +280,7 @@ export const Register: React.FC<RegisterProps> = ({
                 onChange={(e) => setPassword(e.target.value)}
                 error={organizerErrors.password}
                 className="flex-1"
+                required
               />
               <Input
                 label="Confirm Password"
@@ -282,6 +290,7 @@ export const Register: React.FC<RegisterProps> = ({
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 error={organizerErrors.confirmPassword}
                 className="flex-1"
+                required
               />
             </div>
             <p className="text-left text-xs text-ink-gray-70 -mt-2 mb-2 font-medium">
@@ -297,6 +306,7 @@ export const Register: React.FC<RegisterProps> = ({
                 onChange={(e) => setOrgName(e.target.value)}
                 error={organizerErrors.orgName}
                 className="flex-1"
+                required
               />
               <Input
                 label="Phone Number"
@@ -306,6 +316,7 @@ export const Register: React.FC<RegisterProps> = ({
                 onChange={(e) => setPhone(e.target.value)}
                 error={organizerErrors.phone}
                 className="flex-1"
+                required
               />
             </div>
 
@@ -316,6 +327,7 @@ export const Register: React.FC<RegisterProps> = ({
               value={eventType}
               onChange={(e) => setEventType(e.target.value)}
               error={organizerErrors.eventType}
+              required
             />
 
             <Input
@@ -325,6 +337,7 @@ export const Register: React.FC<RegisterProps> = ({
               value={about}
               onChange={(e) => setAbout(e.target.value)}
               error={organizerErrors.about}
+              required
             />
 
             <Button type="submit" variant="primary" className="mt-2 w-full" disabled={isSubmitting}>

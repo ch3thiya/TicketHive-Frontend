@@ -23,7 +23,7 @@ describe('HoldConfirmationPopUp', () => {
     expect(screen.getByText('Ticket Hold Confirmed!')).toBeInTheDocument();
     expect(screen.getByText(/You are holding this ticket! Proceed to payment/i)).toBeInTheDocument();
     expect(screen.getByText('General Admission × 2')).toBeInTheDocument();
-    expect(screen.getByText('$170.00')).toBeInTheDocument();
+    expect(screen.getByText('Rs. 170.00 LKR')).toBeInTheDocument();
     expect(screen.getByText('Proceed to Payment')).toBeInTheDocument();
   });
 

@@ -11,6 +11,8 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
   },
   server: {
+    host: true,
+    allowedHosts: ['nice-things-lie.loca.lt'],
     proxy: {
       '/api/catalog': {
         target: process.env.VITE_CATALOG_API_URL || 'http://localhost:5142',
@@ -24,6 +26,23 @@ export default defineConfig({
         target: process.env.VITE_INVENTORY_API_URL || 'http://localhost:5219',
         changeOrigin: true,
       },
+      '/api/booking': {
+        target: process.env.VITE_BOOKING_API_URL || 'http://localhost:5005',
+        changeOrigin: true,
+      },
+      '/api/payment': {
+        target: process.env.VITE_PAYMENT_API_URL || 'http://localhost:5006',
+        changeOrigin: true,
+      },
+      '/api/waiting-room': {
+        target: process.env.VITE_WAITING_ROOM_API_URL || 'http://localhost:5231',
+        changeOrigin: true,
+      },
+      '/api/notification': {
+        target: process.env.VITE_NOTIFICATION_API_URL || 'http://localhost:5007',
+        changeOrigin: true,
+      },
     },
   },
 })
+

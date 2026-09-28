@@ -9,7 +9,8 @@ interface HoldConfirmationPopUpProps {
   totalPrice: number;
   currency?: string;
   expiresAt: string;
-  onProceedToPayment: () => void;
+  onProceedToPayment: () => void | Promise<void>;
+  onCancelHold?: () => void;
   onClose: () => void;
 }
 
@@ -18,12 +19,15 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
   categoryName,
   quantity,
   totalPrice,
-  currency = 'USD',
+  currency = 'LKR',
   expiresAt,
   onProceedToPayment,
+  onCancelHold,
   onClose,
 }) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
+  const [isCanceling, setIsCanceling] = useState(false);
+  const [isProceeding, setIsProceeding] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !expiresAt) return;
@@ -33,6 +37,11 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
       const now = new Date().getTime();
       const diff = Math.max(0, Math.floor((target - now) / 1000));
 
+      if (diff <= 0) {
+        onClose();
+        return;
+      }
+
       const mins = Math.floor(diff / 60);
       const secs = diff % 60;
       setTimeLeft(`${mins}:${secs < 10 ? '0' : ''}${secs}`);
@@ -41,7 +50,7 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
     updateTimer();
     const interval = setInterval(updateTimer, 1000);
     return () => clearInterval(interval);
-  }, [isOpen, expiresAt]);
+  }, [isOpen, expiresAt, onClose]);
 
   if (!isOpen) return null;
 
@@ -92,7 +101,7 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
               TOTAL AMOUNT
             </span>
             <span className="font-heading font-extrabold text-lg text-brand-blue">
-              ${totalPrice.toFixed(2)} {currency !== 'USD' ? currency : ''}
+              Rs. {totalPrice.toFixed(2)} {currency}
             </span>
           </div>
 
@@ -111,11 +120,55 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
 
         {/* Primary Action Button */}
         <button
-          onClick={onProceedToPayment}
-          className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2"
+          onClick={async () => {
+            setIsProceeding(true);
+            try {
+              await onProceedToPayment();
+            } finally {
+              setIsProceeding(false);
+            }
+          }}
+          disabled={isProceeding || isCanceling}
+          className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-wait"
         >
-          <CreditCard size={20} />
-          <span>Proceed to Payment</span>
+          {isProceeding ? (
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Processing…</span>
+            </div>
+          ) : (
+            <>
+              <CreditCard size={20} />
+              <span>Proceed to Payment</span>
+            </>
+          )}
+        </button>
+
+        {/* Cancel Hold Secondary Button */}
+        <button
+          onClick={async () => {
+            if (onCancelHold) {
+              setIsCanceling(true);
+              try {
+                await onCancelHold();
+              } finally {
+                setIsCanceling(false);
+              }
+            } else {
+              onClose();
+            }
+          }}
+          disabled={isCanceling}
+          className="w-full mt-3 bg-brand-white hover:bg-rose-50 text-state-error font-heading font-bold text-sm py-3 px-6 rounded-full border-2 border-ink-black shadow-[2px_2px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          {isCanceling ? (
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-state-error border-t-transparent rounded-full animate-spin"></div>
+              <span>Canceling Hold…</span>
+            </div>
+          ) : (
+            <span>Cancel Hold</span>
+          )}
         </button>
 
         {/* Secure Note */}
