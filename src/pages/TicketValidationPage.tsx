@@ -5,7 +5,8 @@ import { QrCode, CheckCircle2, AlertTriangle, XCircle, ArrowLeft, ShieldCheck, R
 const BOOKING_API_URL = import.meta.env.VITE_BOOKING_API_URL || '';
 
 interface TicketValidationPageProps {
-  onNavigateHome: () => void;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 interface ValidationLog {
@@ -19,17 +20,17 @@ interface ValidationLog {
   };
 }
 
-export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ onNavigateHome }) => {
+export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ isOpen, onClose }) => {
   const { apiFetch } = useAuth();
   const [ticketCode, setTicketCode] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<ValidationLog | null>(null);
   const [scanHistory, setScanHistory] = useState<ValidationLog[]>([]);
 
-  const handleValidate = async (e?: React.FormEvent) => {
+  const handleValidate = async (e?: React.FormEvent, codeToValidate?: string) => {
     if (e) e.preventDefault();
 
-    const cleanCode = ticketCode.trim().toUpperCase();
+    const cleanCode = (codeToValidate || ticketCode).trim().toUpperCase();
     if (!cleanCode) return;
 
     setIsValidating(true);
@@ -85,37 +86,60 @@ export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ onNa
     }
   };
 
+  // Auto-validate and reset state when opened/closed
+  React.useEffect(() => {
+    if (isOpen) {
+      const params = new URLSearchParams(window.location.search);
+      const validateParam = params.get('validate');
+      if (validateParam) {
+        setTicketCode(validateParam);
+        setTimeout(() => {
+          handleValidate(undefined, validateParam);
+          // Remove query parameter without reloading
+          const newUrl = window.location.pathname;
+          window.history.replaceState({}, '', newUrl);
+        }, 300);
+      }
+    } else {
+      setTicketCode('');
+      setValidationResult(null);
+      setScanHistory([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
   return (
-    <div className="max-w-4xl mx-auto px-6 py-10 w-full animate-in fade-in duration-200">
-      
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-[#0A0A0F]/60 backdrop-blur-sm transition-all duration-300">
+      <div className="bg-brand-white border-3 border-ink-black rounded-[32px] shadow-soft-3d w-full max-w-[700px] max-h-[90vh] overflow-y-auto p-8 relative flex flex-col animate-in fade-in zoom-in duration-200">
+        
+        {/* Close Button */}
+        <button
+          onClick={onClose}
+          className="absolute top-6 right-6 w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light transition-all"
+          aria-label="Close modal"
+        >
+          <span className="font-body font-bold text-sm text-ink-black select-none">✕</span>
+        </button>
+
       {/* Header Bar */}
-      <div className="flex items-center justify-between mb-8 pb-6 border-b-3 border-ink-black">
+      <div className="flex items-center justify-between mb-8 pb-6 mt-2">
         <div className="flex items-center gap-3">
-          <button
-            onClick={onNavigateHome}
-            className="p-2 rounded-full border-2 border-ink-black hover:bg-brand-blue-light transition-all cursor-pointer"
-            aria-label="Back"
-          >
-            <ArrowLeft size={18} />
-          </button>
           <div>
-            <h1 className="font-heading font-extrabold text-3xl text-ink-black flex items-center gap-2">
-              <ShieldCheck className="text-brand-blue" size={32} />
+            <h1 className="font-heading font-extrabold text-2xl text-ink-black flex items-center gap-2">
               <span>Organizer Ticket Validator</span>
             </h1>
-            <p className="font-body text-xs text-ink-gray-70 mt-0.5">
-              Scan or enter attendee ticket codes to validate entry at the door.
+            <p className="font-body text-sm text-ink-gray-200 mt-1">
+              Enter or Scan Ticket Code (e.g. TKT-XXXX-XXXX-XXXX)
             </p>
           </div>
         </div>
       </div>
 
       {/* Main Validation Input Card */}
-      <div className="bg-brand-white border-3 border-ink-black rounded-[32px] p-8 shadow-[8px_8px_0px_0px_#0A0A0F] mb-8">
+      <div className="bg-brand-white mb-8">
         <form onSubmit={handleValidate} className="flex flex-col gap-4">
-          <label className="font-heading font-bold text-sm text-ink-black uppercase tracking-wider">
-            Enter or Scan Ticket Code (e.g. TKT-XXXX-XXXX-XXXX)
-          </label>
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <input
@@ -247,6 +271,7 @@ export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ onNa
         </div>
       )}
 
+      </div>
     </div>
   );
 };

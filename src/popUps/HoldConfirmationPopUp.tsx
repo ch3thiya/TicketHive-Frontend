@@ -9,7 +9,7 @@ interface HoldConfirmationPopUpProps {
   totalPrice: number;
   currency?: string;
   expiresAt: string;
-  onProceedToPayment: () => void;
+  onProceedToPayment: () => void | Promise<void>;
   onCancelHold?: () => void;
   onClose: () => void;
 }
@@ -27,6 +27,7 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
 }) => {
   const [timeLeft, setTimeLeft] = useState<string>('');
   const [isCanceling, setIsCanceling] = useState(false);
+  const [isProceeding, setIsProceeding] = useState(false);
 
   useEffect(() => {
     if (!isOpen || !expiresAt) return;
@@ -119,11 +120,28 @@ export const HoldConfirmationPopUp: React.FC<HoldConfirmationPopUpProps> = ({
 
         {/* Primary Action Button */}
         <button
-          onClick={onProceedToPayment}
-          className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2"
+          onClick={async () => {
+            setIsProceeding(true);
+            try {
+              await onProceedToPayment();
+            } finally {
+              setIsProceeding(false);
+            }
+          }}
+          disabled={isProceeding || isCanceling}
+          className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-wait"
         >
-          <CreditCard size={20} />
-          <span>Proceed to Payment</span>
+          {isProceeding ? (
+            <div className="flex items-center gap-2">
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              <span>Processing…</span>
+            </div>
+          ) : (
+            <>
+              <CreditCard size={20} />
+              <span>Proceed to Payment</span>
+            </>
+          )}
         </button>
 
         {/* Cancel Hold Secondary Button */}

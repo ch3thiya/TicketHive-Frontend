@@ -9,6 +9,7 @@ interface NavbarProps {
   searchQuery?: string;
   onSearchChange?: (query: string) => void;
   onCategoryClick?: (category: string) => void;
+  onValidateClick?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -18,6 +19,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   searchQuery = '',
   onSearchChange,
   onCategoryClick,
+  onValidateClick,
 }) => {
   const { isAuthenticated, logout, role } = useAuth();
 
@@ -113,25 +115,26 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </button>
                   <button
                     onClick={() => {
-                      window.history.pushState({}, '', '/organizer/validate');
-                      window.dispatchEvent(new PopStateEvent('popstate'));
+                      onValidateClick?.();
                     }}
                     className="font-body font-bold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors cursor-pointer mr-2 select-none flex items-center gap-1.5"
                   >
-                    <span>🛡️ Validate Tickets</span>
+                    <span>Validate Tickets</span>
                   </button>
                 </>
               )}
 
-              <button
-                onClick={() => {
-                  window.history.pushState({}, '', '/my-tickets');
-                  window.dispatchEvent(new PopStateEvent('popstate'));
-                }}
-                className="font-body font-bold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors cursor-pointer mr-2 select-none flex items-center gap-1.5"
-              >
-                <span>My Tickets</span>
-              </button>
+              {role !== 'admin' && role !== 'organizer' && (
+                <button
+                  onClick={() => {
+                    window.history.pushState({}, '', '/my-tickets');
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                  }}
+                  className="font-body font-bold text-[14px] text-ink-black tracking-[0.2px] hover:text-brand-blue transition-colors cursor-pointer mr-2 select-none flex items-center gap-1.5"
+                >
+                  <span>My Tickets</span>
+                </button>
+              )}
               
               <button
                 onClick={logout}

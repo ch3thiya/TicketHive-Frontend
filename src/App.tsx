@@ -20,6 +20,7 @@ import { useAuth } from './auth/AuthContext';
 function App() {
   const [currentPath, setCurrentPath] = useState(window.location.pathname);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
+  const [isValidationOpen, setIsValidationOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const { isAuthenticated, role, login, isLoading } = useAuth();
@@ -37,6 +38,15 @@ function App() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  // Auto-open validation modal if ?validate= param is present
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('validate') && (role === 'organizer' || role === 'admin')) {
+      setIsValidationOpen(true);
+    }
+  }, [isAuthenticated, role]);
 
   // Redirect users on successful login based on their role
   useEffect(() => {
@@ -110,14 +120,6 @@ function App() {
 
     if (currentPath === '/organizer-dashboard') {
       return <OrganizerDashboard />;
-    }
-
-    if (currentPath === '/organizer/validate') {
-      return (
-        <TicketValidationPage
-          onNavigateHome={() => navigateTo('/')}
-        />
-      );
     }
 
     if (currentPath === '/my-tickets') {
@@ -194,6 +196,7 @@ function App() {
           }}
           onLoginClick={login}
           onSignUpClick={() => setIsSignUpOpen(true)}
+          onValidateClick={() => setIsValidationOpen(true)}
           searchQuery={searchQuery}
           onSearchChange={(query) => {
             setSearchQuery(query);
@@ -230,6 +233,12 @@ function App() {
           setIsSignUpOpen(false);
           navigateTo(`/register?role=${role}`);
         }}
+      />
+      
+      {/* Ticket Validation PopUp modal */}
+      <TicketValidationPage
+        isOpen={isValidationOpen}
+        onClose={() => setIsValidationOpen(false)}
       />
     </div>
   );
