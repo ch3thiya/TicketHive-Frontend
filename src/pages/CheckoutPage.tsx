@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { CheckCircle2, AlertCircle, CreditCard, Lock, ArrowLeft } from 'lucide-react';
+import { Ticket } from '../components/Ticket';
 
 const BOOKING_API_URL = import.meta.env.VITE_BOOKING_API_URL || '';
 const PAYMENT_API_URL = import.meta.env.VITE_PAYMENT_API_URL || BOOKING_API_URL;
@@ -50,8 +51,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   const [payHereParams, setPayHereParams] = useState<PayHereCheckoutParams | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null);
   const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
+  const [eventDetails, setEventDetails] = useState<any | null>(null);
+  const [ticketDetails, setTicketDetails] = useState<any | null>(null);
 
   const isEmail = (val: unknown): val is string =>
     typeof val === 'string' && val.includes('@') && val.includes('.');
@@ -61,17 +66,17 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     const userEmail = isEmail(authEmail)
       ? authEmail
       : isEmail(profile?.email)
-      ? (profile.email as string)
-      : isEmail(profile?.username)
-      ? (profile.username as string)
-      : isEmail(profile?.preferred_username)
-      ? (profile.preferred_username as string)
-      : '';
+        ? (profile.email as string)
+        : isEmail(profile?.username)
+          ? (profile.username as string)
+          : isEmail(profile?.preferred_username)
+            ? (profile.preferred_username as string)
+            : '';
 
-    let fName = (profile?.given_name as string) || (profile?.givenName as string) || '';
+    let fName = (profile?.given_name as string) || (profile?.givenName as string) || (profile?.nickname as string) || '';
     let lName = (profile?.family_name as string) || (profile?.familyName as string) || '';
 
-    if (!fName && authFullName) {
+    if (!fName && authFullName && !authFullName.includes('@')) {
       const parts = authFullName.trim().split(' ');
       fName = parts[0] || '';
       lName = parts.slice(1).join(' ') || '';
@@ -92,22 +97,30 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
 
   // Sync user info if auth profile loads after initial mount
   useEffect(() => {
-    if (authEmail || authFullName) {
+    if (authEmail || authFullName || profile) {
       setCustomerDetails((prev) => {
         const validAuthEmail = isEmail(authEmail) ? authEmail : prev.email;
-        let fName = (profile?.given_name as string) || prev.firstName;
-        let lName = (profile?.family_name as string) || prev.lastName;
+        let newFName = prev.firstName;
+        let newLName = prev.lastName;
 
-        if (!fName && authFullName && !prev.firstName) {
-          const parts = authFullName.trim().split(' ');
-          fName = parts[0] || '';
-          lName = parts.slice(1).join(' ') || '';
+        if (!newFName) {
+          newFName = (profile?.given_name as string) || (profile?.givenName as string) || (profile?.nickname as string) || '';
+          if (!newFName && authFullName && !authFullName.includes('@')) {
+            newFName = authFullName.trim().split(' ')[0] || '';
+          }
+        }
+
+        if (!newLName) {
+          newLName = (profile?.family_name as string) || (profile?.familyName as string) || '';
+          if (!newLName && authFullName && !authFullName.includes('@')) {
+            newLName = authFullName.trim().split(' ').slice(1).join(' ') || '';
+          }
         }
 
         return {
           ...prev,
-          firstName: fName,
-          lastName: lName,
+          firstName: newFName,
+          lastName: newLName,
           email: validAuthEmail,
         };
       });
@@ -173,6 +186,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   };
 
   const handlePayHereCheckout = async () => {
+    setIsProcessingPayment(true);
+    setValidationError(null);
     const errors: { firstName?: string; lastName?: string; email?: string } = {};
 
     if (!customerDetails.firstName.trim()) {
@@ -189,13 +204,11 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
 
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
-      setError('Please fill in all required fields (First Name, Last Name, Email) before continuing.');
-      console.warn('[Checkout Debug] Validation failed:', errors);
+      setIsProcessingPayment(false);
       return;
     }
 
     setFormErrors({});
-    setError(null);
 
     const customerEmail = customerDetails.email.trim();
     const customerName = `${customerDetails.firstName} ${customerDetails.lastName}`.trim();
@@ -207,22 +220,26 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
         body: JSON.stringify({ customerEmail, customerName }),
       });
       if (!contactRes.ok) {
-        setError('Unable to save your contact details for the ticket email.');
+        setValidationError('Unable to save your contact details for the ticket email.');
+        setIsProcessingPayment(false);
         return;
       }
     } catch (err) {
       console.error('[Checkout Debug] Failed to save customer contact:', err);
-      setError('Unable to save your contact details for the ticket email.');
+      setValidationError('Unable to save your contact details for the ticket email.');
+      setIsProcessingPayment(false);
       return;
     }
 
     if (!payHereParams) {
-      setError('Payment parameters not loaded.');
+      setValidationError('Payment parameters not loaded.');
+      setIsProcessingPayment(false);
       return;
     }
 
     if (remainingSeconds !== null && remainingSeconds <= 0) {
-      setError('Ticket hold has expired. Payment is disabled.');
+      setValidationError('Ticket hold has expired. Payment is disabled.');
+      setIsProcessingPayment(false);
       return;
     }
 
@@ -234,12 +251,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
 
       window.payhere.onDismissed = () => {
         console.log('[Checkout Debug] PayHere payment window dismissed');
+        setIsProcessingPayment(false);
         fetchOrderStatus();
       };
 
       window.payhere.onError = (err: string) => {
         console.error('[Checkout Debug] PayHere error:', err);
-        setError(`PayHere Error: ${err}`);
+        setValidationError(`PayHere Error: ${err}`);
+        setIsProcessingPayment(false);
       };
 
       const payment = {
@@ -307,6 +326,33 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
         } else {
           setError('Unable to load payment parameters.');
         }
+
+        try {
+          const orderRes = await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}`);
+          if (orderRes.ok) {
+            const orderData = await orderRes.json();
+            const eventsRes = await fetch(`${BOOKING_API_URL}/api/catalog/events`);
+            if (eventsRes.ok) {
+              const eventsData = await eventsRes.json();
+              const matchedEvent = eventsData.find((e: any) => e.shows?.some((s: any) => s.id === orderData.showId));
+              if (matchedEvent) {
+                const matchedShow = matchedEvent.shows.find((s: any) => s.id === orderData.showId);
+                const categoryId = orderData.items?.[0]?.categoryId;
+                const matchedCategory = matchedEvent.ticketCategories?.find((c: any) => c.id === categoryId || c.categoryId === categoryId);
+                setEventDetails({
+                  bannerUrl: matchedEvent.coverImageUrl || matchedEvent.coverUrl || matchedEvent.bannerUrl || matchedEvent.imageUrl,
+                  posterUrl: matchedEvent.imageUrl || matchedEvent.bannerUrl || matchedEvent.coverImageUrl || matchedEvent.coverUrl,
+                  name: matchedEvent.name,
+                  date: matchedShow?.showDate,
+                  time: matchedShow?.showTime,
+                  categoryName: matchedCategory?.name || 'General Admission',
+                });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('Failed to fetch event details', e);
+        }
       } catch (err) {
         console.error('Error initializing checkout:', err);
         setError('Network error while initializing checkout.');
@@ -327,8 +373,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     const expiresAtTime = orderStatus.expiresAt
       ? new Date(orderStatus.expiresAt).getTime()
       : orderStatus.createdAt
-      ? new Date(orderStatus.createdAt).getTime() + 10 * 60 * 1000
-      : Date.now() + 10 * 60 * 1000;
+        ? new Date(orderStatus.createdAt).getTime() + 10 * 60 * 1000
+        : Date.now() + 10 * 60 * 1000;
 
     const updateTimer = () => {
       const diffSec = Math.floor((expiresAtTime - Date.now()) / 1000);
@@ -354,6 +400,25 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
 
     return () => clearInterval(interval);
   }, [orderStatus?.status, orderId]);
+
+  // Fetch ticket details when Confirmed
+  useEffect(() => {
+    if (orderStatus?.status === 'Confirmed') {
+      const fetchTicket = async () => {
+        try {
+          const res = await apiFetch(`${BOOKING_API_URL}/api/booking/tickets`);
+          if (res.ok) {
+            const data = await res.json();
+            const matchedTicket = data.find((t: any) => t.orderId === orderId);
+            if (matchedTicket) {
+              setTicketDetails(matchedTicket);
+            }
+          }
+        } catch (e) { }
+      };
+      fetchTicket();
+    }
+  }, [orderStatus?.status, orderId, apiFetch]);
 
   // Auto-redirect countdown on hold expiration
   const isExpiredState =
@@ -415,44 +480,68 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
 
   if (orderStatus.status === 'Confirmed') {
     return (
-      <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
-        <div className="bg-brand-white border-3 border-ink-black rounded-[32px] shadow-soft-3d w-full max-w-[500px] p-8 flex flex-col items-center text-center">
-          <div className="w-20 h-20 rounded-full bg-emerald-100 border-3 border-ink-black flex items-center justify-center mb-6 text-emerald-600 shadow-brutal-s">
-            <CheckCircle2 size={48} strokeWidth={2.5} />
+      <div className="min-h-[calc(100vh-80px)] w-full flex flex-col animate-in fade-in zoom-in duration-300 max-w-7xl mx-auto items-center justify-center px-6">
+        <div className="flex flex-col lg:flex-row gap-8 w-full max-w-[1200px] items-stretch py-10">
+
+          {/* Left Column: Ticket (2/3 width on large screens) */}
+          <div className="w-full lg:w-2/3 flex flex-col justify-center">
+            {ticketDetails && eventDetails && (
+              <Ticket
+                eventDetails={eventDetails}
+                ticketDetails={{
+                  ...ticketDetails,
+                  customerName: `${customerDetails.firstName} ${customerDetails.lastName}`,
+                  price: orderStatus.totalAmount
+                }}
+              />
+            )}
+            {!ticketDetails && (
+              <div className="w-full bg-[#F9F9FF] border-2 border-ink-black rounded-24 p-4 text-left">
+                <div className="flex justify-between py-1 text-sm border-b border-ink-gray-30">
+                  <span className="font-bold text-ink-gray-70">Order Reference:</span>
+                  <span className="font-mono text-ink-black font-bold">{orderStatus.orderId.slice(0, 13)}</span>
+                </div>
+                <div className="flex justify-between py-1 text-sm">
+                  <span className="font-bold text-ink-gray-70">Status:</span>
+                  <span className="font-bold text-emerald-600">CONFIRMED & ISSUED</span>
+                </div>
+              </div>
+            )}
           </div>
-          <h2 className="font-heading font-extrabold text-3xl text-ink-black mb-2">
-            Payment Successful!
-          </h2>
-          <p className="font-body text-ink-gray-70 text-sm mb-6 max-w-sm">
-            Your payment of <strong className="text-ink-black font-bold">Rs. {orderStatus.totalAmount.toFixed(2)} {orderStatus.currency}</strong> was processed successfully and your e-tickets have been issued!
-          </p>
-          <div className="w-full bg-[#F9F9FF] border-2 border-ink-black rounded-24 p-4 mb-6 text-left">
-            <div className="flex justify-between py-1 text-sm border-b border-ink-gray-30">
-              <span className="font-bold text-ink-gray-70">Order Reference:</span>
-              <span className="font-mono text-ink-black font-bold">{orderStatus.orderId.slice(0, 13)}…</span>
-            </div>
-            <div className="flex justify-between py-1 text-sm">
-              <span className="font-bold text-ink-gray-70">Status:</span>
-              <span className="font-bold text-emerald-600">CONFIRMED & ISSUED</span>
+
+          {/* Right Column: Success Box (1/3 width on large screens) */}
+          <div className="w-full lg:w-1/3 flex flex-col justify-center h-full">
+            <div className="bg-brand-white border-3 border-ink-black rounded-[32px] shadow-[8px_8px_0px_0px_#0A0A0F] w-full p-8 flex flex-col items-center text-center h-full">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 border-3 border-ink-black flex items-center justify-center mb-6 text-emerald-600 shadow-brutal-s shrink-0">
+                <CheckCircle2 size={36} strokeWidth={2.5} />
+              </div>
+              <h2 className="font-heading font-extrabold text-3xl text-ink-black mb-4">
+                Payment Successful!
+              </h2>
+              <p className="font-body text-ink-gray-70 text-sm mb-8 leading-relaxed">
+                Your payment of <strong className="text-ink-black font-bold">Rs. {orderStatus.totalAmount.toFixed(2)} {orderStatus.currency}</strong> was processed successfully!
+              </p>
+
+              <div className="mt-auto w-full flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    window.history.pushState({}, '', '/my-tickets');
+                    window.dispatchEvent(new PopStateEvent('popstate'));
+                  }}
+                  className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] active:shadow-[1px_1px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <span>View My Tickets 🎟️</span>
+                </button>
+                <button
+                  onClick={onNavigateHome}
+                  className="w-full bg-brand-white hover:bg-[#F9F9FF] text-ink-black font-heading font-bold text-sm py-3 px-6 rounded-full border-2 border-ink-black shadow-[2px_2px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all cursor-pointer flex items-center justify-center"
+                >
+                  Explore More Events
+                </button>
+              </div>
             </div>
           </div>
-          
-          <button
-            onClick={() => {
-              window.history.pushState({}, '', '/my-tickets');
-              window.dispatchEvent(new PopStateEvent('popstate'));
-            }}
-            className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-3.5 px-6 rounded-full border-3 border-ink-black shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer mb-3 flex items-center justify-center gap-2"
-          >
-            <span>View My Tickets 🎟️</span>
-          </button>
-          
-          <button
-            onClick={onNavigateHome}
-            className="w-full bg-brand-white hover:bg-[#F9F9FF] text-ink-black font-heading font-bold text-sm py-2.5 px-6 rounded-full border-2 border-ink-black shadow-[2px_2px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all cursor-pointer"
-          >
-            Explore More Events
-          </button>
+
         </div>
       </div>
     );
@@ -469,7 +558,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
         <p className="font-body text-ink-gray-70 text-sm mb-6">
           Your 10-minute ticket hold has expired and the reserved tickets have been released back to available inventory.
         </p>
-        
+
         <div className="bg-amber-50 border-2 border-amber-300 rounded-20 px-4 py-2.5 text-xs font-bold text-amber-900 mb-6 w-full">
           <span>Redirecting to Home in </span>
           <span className="text-amber-700 font-extrabold text-sm">{redirectCountdown}s</span>
@@ -484,35 +573,40 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
         </button>
       </div>
     );
-  }   
+  }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-10 w-full min-h-screen animate-in fade-in duration-200">
-      
+    <div className="max-w-7xl mx-auto py-10 w-full min-h-screen animate-in fade-in duration-200">
+
       {/* Top Header */}
-      <div className="flex items-center justify-between mb-8 pb-6 border-b-2 border-ink-black flex-wrap gap-4">
+      <div className="flex items-center justify-between mb-8 pb-6 flex-wrap gap-4">
         <div>
           <h1 className="font-heading font-extrabold text-3xl text-ink-black">Complete Your Purchase</h1>
           <p className="font-body text-sm text-ink-gray-70 mt-1">Review details and pay securely via PayHere Gateway</p>
         </div>
-        
+
         {remainingSeconds !== null && (
-          <div className={`flex items-center gap-2 border-2 border-ink-black rounded-full px-4 py-2 text-xs font-bold shadow-brutal-s ${
-            remainingSeconds < 120 ? 'bg-rose-100 text-rose-800 border-rose-900 animate-pulse' : 'bg-amber-100 text-amber-900'
-          }`}>
-            <span className="text-base">⏱️</span>
+          <div className={`flex items-center gap-2 border-2 border-ink-black rounded-full px-4 py-2 text-xs font-bold shadow-brutal-s ${remainingSeconds < 120 ? 'bg-rose-100 text-rose-800 border-rose-900 animate-pulse' : 'bg-amber-100 text-amber-900'
+            }`}>
             <span>Hold Expires In:</span>
             <span className="font-mono text-sm font-black">{formatRemainingTime(remainingSeconds)}</span>
           </div>
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-        
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
+
         {/* Left Column: Billing Details */}
-        <div className="md:col-span-7 bg-brand-white border-3 border-ink-black rounded-32 p-6 shadow-brutal-s flex flex-col gap-4">
+        <div className="md:col-span-7 bg-brand-white border-3 border-ink-black rounded-32 p-6 shadow-brutal-s flex flex-col gap-4 h-full">
           <h2 className="font-heading font-extrabold text-xl text-ink-black mb-1">Billing Details</h2>
-          
+
+          {validationError && (
+            <div className="bg-rose-50 border-2 border-rose-300 rounded-16 p-3 flex items-start gap-2 text-rose-800">
+              <AlertCircle size={18} className="mt-0.5 shrink-0 text-rose-600" />
+              <p className="font-body text-sm font-bold">{validationError}</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-ink-gray-70 mb-1">
@@ -526,10 +620,9 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
                   setCustomerDetails({ ...customerDetails, firstName: e.target.value });
                   if (formErrors.firstName) setFormErrors({ ...formErrors, firstName: undefined });
                 }}
-                className={`w-full border-2 rounded-16 px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 ${
-                  formErrors.firstName ? 'border-rose-500 bg-rose-50 focus:ring-rose-500' : 'border-ink-black focus:ring-brand-blue'
-                }`}
-                placeholder="John"
+                className={`w-full border-2 rounded-16 px-3 py-3 text-sm font-body focus:outline-none focus:ring-2 ${formErrors.firstName ? 'border-rose-500 bg-rose-50 focus:ring-rose-500' : 'border-ink-black focus:ring-brand-blue'
+                  }`}
+                placeholder=""
               />
               {formErrors.firstName && (
                 <p className="text-rose-600 text-xs mt-1 font-semibold">{formErrors.firstName}</p>
@@ -547,10 +640,9 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
                   setCustomerDetails({ ...customerDetails, lastName: e.target.value });
                   if (formErrors.lastName) setFormErrors({ ...formErrors, lastName: undefined });
                 }}
-                className={`w-full border-2 rounded-16 px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 ${
-                  formErrors.lastName ? 'border-rose-500 bg-rose-50 focus:ring-rose-500' : 'border-ink-black focus:ring-brand-blue'
-                }`}
-                placeholder="Doe"
+                className={`w-full border-2 rounded-16 px-3 py-3 text-sm font-body focus:outline-none focus:ring-2 ${formErrors.lastName ? 'border-rose-500 bg-rose-50 focus:ring-rose-500' : 'border-ink-black focus:ring-brand-blue'
+                  }`}
+                placeholder=""
               />
               {formErrors.lastName && (
                 <p className="text-rose-600 text-xs mt-1 font-semibold">{formErrors.lastName}</p>
@@ -570,9 +662,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
                 setCustomerDetails({ ...customerDetails, email: e.target.value });
                 if (formErrors.email) setFormErrors({ ...formErrors, email: undefined });
               }}
-              className={`w-full border-2 rounded-16 px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 ${
-                formErrors.email ? 'border-rose-500 bg-rose-50 focus:ring-rose-500' : 'border-ink-black focus:ring-brand-blue'
-              }`}
+              className={`w-full border-2 rounded-16 px-3 py-3 text-sm font-body focus:outline-none focus:ring-2 ${formErrors.email ? 'border-rose-500 bg-rose-50 focus:ring-rose-500' : 'border-ink-black focus:ring-brand-blue'
+                }`}
               placeholder="alex.johnson@example.com"
             />
             {formErrors.email && (
@@ -586,7 +677,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
               type="text"
               value={customerDetails.phone}
               onChange={(e) => setCustomerDetails({ ...customerDetails, phone: e.target.value })}
-              className="w-full border-2 border-ink-black rounded-16 px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-brand-blue"
+              className="w-full border-2 border-ink-black rounded-16 px-3 py-3 text-sm font-body focus:outline-none focus:ring-2 focus:ring-brand-blue"
             />
           </div>
 
@@ -597,7 +688,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
                 type="text"
                 value={customerDetails.address}
                 onChange={(e) => setCustomerDetails({ ...customerDetails, address: e.target.value })}
-                className="w-full border-2 border-ink-black rounded-16 px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                className="w-full border-2 border-ink-black rounded-16 px-3 py-3 text-sm font-body focus:outline-none focus:ring-2 focus:ring-brand-blue"
               />
             </div>
             <div>
@@ -606,22 +697,40 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
                 type="text"
                 value={customerDetails.city}
                 onChange={(e) => setCustomerDetails({ ...customerDetails, city: e.target.value })}
-                className="w-full border-2 border-ink-black rounded-16 px-3 py-2 text-sm font-body focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                className="w-full border-2 border-ink-black rounded-16 px-3 py-3 text-sm font-body focus:outline-none focus:ring-2 focus:ring-brand-blue"
               />
             </div>
           </div>
         </div>
 
         {/* Right Column: Order Summary & PayHere Submit */}
-        <div className="md:col-span-5 flex flex-col gap-6">
-          <div className="bg-[#F9F9FF] border-3 border-ink-black rounded-32 p-6 shadow-brutal-s flex flex-col gap-4">
+        <div className="md:col-span-5 h-full">
+          <div className="bg-[#F9F9FF] border-3 border-ink-black rounded-32 p-6 shadow-brutal-s flex flex-col gap-4 h-full">
             <h2 className="font-heading font-extrabold text-xl text-ink-black pb-3 border-b border-ink-gray-30">
               Order Summary
             </h2>
-            
+
+            {eventDetails && (
+              <div className="flex gap-4 items-center mb-4 mt-2">
+                {eventDetails.bannerUrl ? (
+                  <img src={eventDetails.bannerUrl} alt={eventDetails.name} className="w-[72px] h-[72px] rounded-xl object-cover bg-ink-gray-30 shrink-0" />
+                ) : (
+                  <div className="w-[72px] h-[72px] rounded-xl bg-[#E2E6FF] shrink-0" />
+                )}
+                <div className="flex flex-col gap-1">
+                  <span className="font-heading font-extrabold text-sm text-ink-black line-clamp-1">{eventDetails.name}</span>
+                  <span className="font-body text-[13px] font-medium text-[#7C7C8A]">
+                    {new Date(eventDetails.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} · {eventDetails.time}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {eventDetails && <div className="border-b border-ink-gray-30 mb-2 -mt-2"></div>}
+
             <div className="flex justify-between items-center text-sm">
               <span className="font-body text-ink-gray-70 font-semibold">Order ID:</span>
-              <span className="font-mono text-ink-black font-bold">{orderId.slice(0, 8)}…</span>
+              <span className="font-mono text-ink-black font-bold">{orderId}</span>
             </div>
 
             <div className="flex justify-between items-center text-sm">
@@ -651,7 +760,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
                   <input type="hidden" name="currency" value={payHereParams.currency} />
                   <input type="hidden" name="amount" value={payHereParams.amount.toFixed(2)} />
                   <input type="hidden" name="hash" value={payHereParams.hash} />
-                  
+
                   {/* Billing fields */}
                   <input type="hidden" name="first_name" value={customerDetails.firstName} />
                   <input type="hidden" name="last_name" value={customerDetails.lastName} />
@@ -665,23 +774,42 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
                 <button
                   type="button"
                   onClick={handlePayHereCheckout}
-                  className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-4 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2 mb-3"
+                  disabled={isProcessingPayment}
+                  className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-4 px-6 rounded-full border-3 border-ink-black shadow-[4px_4px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_#0A0A0F] active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2 mb-3 mt-auto disabled:opacity-75 disabled:cursor-wait"
                 >
-                  <CreditCard size={20} />
-                  <span>Pay with PayHere</span>
+                  {isProcessingPayment ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      <span>Initializing Payment…</span>
+                    </div>
+                  ) : (
+                    <>
+                      <CreditCard size={20} />
+                      <span>Pay with PayHere</span>
+                    </>
+                  )}
                 </button>
               </div>
             )}
 
 
             <div className="flex items-center justify-center gap-1.5 text-xs text-ink-gray-70 font-body mt-2">
-              <Lock size={14} className="text-emerald-600" />
+              <Lock size={14} className="text-emerald-600 shrink-0" />
               <span>256-bit Encrypted PayHere Payment Gateway</span>
             </div>
           </div>
         </div>
 
       </div>
+
+      {/* PayHere Processing Overlay */}
+      {isProcessingPayment && (
+        <div className="fixed inset-0 z-[9999] bg-[#0A0A0F]/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="w-16 h-16 border-4 border-brand-blue border-t-brand-white rounded-full animate-spin shadow-soft-3d mb-6"></div>
+          <h3 className="font-heading font-extrabold text-2xl text-brand-white mb-2">Connecting to PayHere</h3>
+          <p className="font-body text-ink-gray-30 text-center max-w-sm">Please wait while we prepare your secure checkout. Do not refresh this page.</p>
+        </div>
+      )}
     </div>
   );
 };

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { QRCodeSVG } from 'qrcode.react';
 import { Ticket as TicketIcon, QrCode, ArrowLeft, RefreshCw, CheckCircle2, Tag } from 'lucide-react';
+import { Ticket } from '../components/Ticket';
 
 const BOOKING_API_URL = import.meta.env.VITE_BOOKING_API_URL || '';
 
@@ -29,6 +30,20 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
   const [error, setError] = useState<string | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<TicketItem | null>(null);
   const [filter, setFilter] = useState<'all' | 'valid' | 'used'>('all');
+  const [events, setEvents] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchAllEvents = async () => {
+      try {
+        const res = await fetch(`${BOOKING_API_URL}/api/catalog/events`);
+        if (res.ok) {
+          const data = await res.json();
+          setEvents(data);
+        }
+      } catch (err) {}
+    };
+    fetchAllEvents();
+  }, []);
 
   const fetchTickets = async () => {
     setIsLoading(true);
@@ -65,24 +80,25 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
   });
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 w-full animate-in fade-in duration-200">
+    <div className="max-w-7xl mx-auto py-10 px-6 w-full min-h-[calc(100vh-80px)] flex-grow flex flex-col animate-in fade-in duration-200">
       
       {/* Header Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b-3 border-ink-black">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6">
         <div>
-          <div className="flex items-center gap-3">
-            <button
+          <div className="flex items-center gap-4">
+            {/* <button
               onClick={onNavigateHome}
-              className="p-2 rounded-full border-2 border-ink-black hover:bg-brand-blue-light transition-all cursor-pointer"
+              className="inline-flex items-center gap-2 font-body font-bold text-xs md:text-sm text-ink-black bg-brand-white border-2 border-ink-black rounded-full px-4 py-2 hover:bg-[#F9F9FF] hover:text-brand-blue cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0A0A0F] active:translate-y-px active:shadow-[1px_1px_0px_0px_#0A0A0F]"
               aria-label="Back to events"
             >
-              <ArrowLeft size={18} />
-            </button>
+              <ArrowLeft size={16} strokeWidth={2.5} />
+              <span>Back</span>
+            </button> */}
             <h1 className="font-heading font-extrabold text-3xl md:text-4xl text-ink-black">
-              My Tickets 🎟️
+              My Tickets
             </h1>
           </div>
-          <p className="font-body text-sm text-ink-gray-70 mt-1 pl-11">
+          <p className="font-body text-sm text-ink-gray-70 mt-2">
             Your confirmed e-tickets. Present the QR code at the event entry.
           </p>
         </div>
@@ -182,32 +198,68 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTickets.map((t) => {
             const isUsed = Boolean(t.usedAt);
+            const matchedEvent = events.find((e) => e.shows?.some((s: any) => s.id === t.showId));
+            const matchedShow = matchedEvent?.shows?.find((s: any) => s.id === t.showId);
+
             return (
               <div
                 key={t.id}
                 className={`bg-brand-white border-3 border-ink-black rounded-32 p-6 shadow-[6px_6px_0px_0px_#0A0A0F] flex flex-col justify-between relative transition-all duration-200 ${
-                  isUsed ? 'opacity-75 grayscale-[0.2]' : 'hover:-translate-y-1'
+                  isUsed ? 'opacity-75 grayscale-[0.2]' : 'hover:-translate-y-1 hover:shadow-[8px_8px_0px_0px_#0A0A0F]'
                 }`}
               >
-                {/* Status Badge */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
-                    <Tag size={16} className="text-brand-blue" />
-                    <span className="font-heading font-extrabold text-xs text-ink-gray-70 uppercase tracking-wider">
-                      E-Ticket
-                    </span>
+                {/* Event Banner & Badge */}
+                {(matchedEvent?.coverImageUrl || matchedEvent?.coverUrl || matchedEvent?.bannerUrl || matchedEvent?.imageUrl) && (
+                  <div className="w-full h-32 mb-4 rounded-20 overflow-hidden border-2 border-ink-black shrink-0 relative bg-ink-gray-30">
+                    <img src={matchedEvent.coverImageUrl || matchedEvent.coverUrl || matchedEvent.bannerUrl || matchedEvent.imageUrl} alt={matchedEvent.name} className="w-full h-full object-cover" />
+                    <div className="absolute top-2 right-2">
+                      {isUsed ? (
+                        <span className="bg-ink-gray-30 text-ink-gray-70 border border-ink-black font-heading font-extrabold text-[11px] px-3 py-1 rounded-full uppercase shadow-sm">
+                          USED
+                        </span>
+                      ) : (
+                        <span className="bg-emerald-100 text-emerald-800 border border-ink-black font-heading font-extrabold text-[11px] px-3 py-1 rounded-full uppercase flex items-center gap-1 shadow-sm">
+                          <CheckCircle2 size={12} />
+                          VALID
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  {isUsed ? (
-                    <span className="bg-ink-gray-30 text-ink-gray-70 border border-ink-black font-heading font-extrabold text-[11px] px-3 py-1 rounded-full uppercase">
-                      REDEEMED / USED
-                    </span>
-                  ) : (
-                    <span className="bg-emerald-100 text-emerald-800 border border-ink-black font-heading font-extrabold text-[11px] px-3 py-1 rounded-full uppercase flex items-center gap-1">
-                      <CheckCircle2 size={12} />
-                      VALID
-                    </span>
-                  )}
-                </div>
+                )}
+                
+                {/* Status Badge (if no banner) */}
+                {!(matchedEvent?.coverImageUrl || matchedEvent?.coverUrl || matchedEvent?.bannerUrl || matchedEvent?.imageUrl) && (
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <Tag size={16} className="text-brand-blue" />
+                      <span className="font-heading font-extrabold text-xs text-ink-gray-70 uppercase tracking-wider">
+                        E-Ticket
+                      </span>
+                    </div>
+                    {isUsed ? (
+                      <span className="bg-ink-gray-30 text-ink-gray-70 border border-ink-black font-heading font-extrabold text-[11px] px-3 py-1 rounded-full uppercase">
+                        REDEEMED / USED
+                      </span>
+                    ) : (
+                      <span className="bg-emerald-100 text-emerald-800 border border-ink-black font-heading font-extrabold text-[11px] px-3 py-1 rounded-full uppercase flex items-center gap-1">
+                        <CheckCircle2 size={12} />
+                        VALID
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Event Title & Date */}
+                {matchedEvent && (
+                  <div className="mb-4">
+                    <h3 className="font-heading font-extrabold text-lg text-ink-black line-clamp-1">{matchedEvent.name}</h3>
+                    {matchedShow && (
+                      <p className="font-body text-xs font-semibold text-ink-gray-70 mt-1">
+                        {new Date(matchedShow.showDate).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })} at {matchedShow.showTime}
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Main Code Box */}
                 <div className="bg-[#F9F9FF] border-2 border-ink-black rounded-20 p-4 mb-4 text-center shadow-brutal-s">
@@ -251,7 +303,7 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
                   className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-sm py-3 px-5 rounded-full border-2 border-ink-black shadow-[3px_3px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2"
                 >
                   <QrCode size={18} />
-                  <span>Show QR Code & Details</span>
+                  <span>Show Ticket</span>
                 </button>
               </div>
             );
@@ -262,57 +314,40 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
       {/* QR Code Modal Dialog (SCRUM-18 AC3) */}
       {selectedTicket && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-[#0A0A0F]/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-brand-white border-3 border-ink-black rounded-[32px] shadow-soft-3d w-full max-w-[420px] p-8 flex flex-col items-center relative animate-in zoom-in duration-200">
-            
+          <div className="relative w-full max-w-[800px] animate-in zoom-in duration-200">
             {/* Close Button */}
             <button
               onClick={() => setSelectedTicket(null)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light transition-all"
+              className="absolute -top-12 right-0 md:-right-12 w-10 h-10 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer bg-brand-white hover:bg-brand-blue hover:text-white transition-all shadow-[2px_2px_0px_0px_#0A0A0F]"
               aria-label="Close ticket popup"
             >
-              <span className="font-body font-bold text-sm text-ink-black">✕</span>
+              <span className="font-body font-bold text-lg leading-none">✕</span>
             </button>
-
-            <h2 className="font-heading font-extrabold text-2xl text-ink-black mb-1">
-              Scannable Entry Code
-            </h2>
-            <p className="font-body text-xs text-ink-gray-70 text-center mb-6">
-              Present this QR code at the venue for scanning.
-            </p>
-
-            {/* QR Code Container */}
-            <div className="bg-white p-5 border-3 border-ink-black rounded-24 shadow-brutal-s mb-6 flex flex-col items-center">
-              <QRCodeSVG
-                value={selectedTicket.uniqueCode}
-                size={200}
-                level="H"
-                includeMargin={true}
-              />
-              <div className="font-mono font-extrabold text-base text-brand-blue tracking-wider mt-3 select-all">
-                {selectedTicket.uniqueCode}
-              </div>
-            </div>
-
-            {/* Ticket Info Footer */}
-            <div className="w-full bg-[#F9F9FF] border-2 border-ink-black rounded-16 p-4 text-xs font-body flex flex-col gap-2">
-              <div className="flex justify-between">
-                <span className="font-bold text-ink-gray-70">Status:</span>
-                <span className={`font-bold ${selectedTicket.usedAt ? 'text-rose-600' : 'text-emerald-600'}`}>
-                  {selectedTicket.usedAt ? 'REDEEMED' : 'VALID FOR ENTRY'}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-bold text-ink-gray-70">Price Paid:</span>
-                <span className="font-bold text-ink-black">Rs. {selectedTicket.price.toFixed(2)} LKR</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setSelectedTicket(null)}
-              className="w-full mt-6 bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold py-3 rounded-full border-2 border-ink-black shadow-brutal-s cursor-pointer"
-            >
-              Close Ticket
-            </button>
+            
+            {(() => {
+              const matchedEvent = events.find((e) => e.shows?.some((s: any) => s.id === selectedTicket.showId));
+              const matchedShow = matchedEvent?.shows?.find((s: any) => s.id === selectedTicket.showId);
+              const category = matchedEvent?.ticketCategories?.find((c: any) => c.id === selectedTicket.categoryId || c.categoryId === selectedTicket.categoryId);
+              
+              if (!matchedEvent || !matchedShow) return null;
+              
+              return (
+                <Ticket
+                  eventDetails={{
+                    name: matchedEvent.name,
+                    date: matchedShow.showDate,
+                    time: matchedShow.showTime,
+                    categoryName: category?.name || 'General Admission',
+                    bannerUrl: matchedEvent.coverImageUrl || matchedEvent.coverUrl || matchedEvent.bannerUrl || matchedEvent.imageUrl,
+                    posterUrl: matchedEvent.imageUrl || matchedEvent.bannerUrl || matchedEvent.coverImageUrl || matchedEvent.coverUrl,
+                  }}
+                  ticketDetails={{
+                    ...selectedTicket,
+                    customerName: '',
+                  }}
+                />
+              );
+            })()}
           </div>
         </div>
       )}
