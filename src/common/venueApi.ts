@@ -26,7 +26,7 @@ interface SimpleErrorBody {
   message?: string;
 }
 
-const CATALOG_API_URL = import.meta.env.VITE_CATALOG_API_URL || 'http://localhost:5142';
+const CATALOG_API_URL = import.meta.env.VITE_CATALOG_API_URL || '';
 
 type ApiFetch = (url: string, options?: RequestInit) => Promise<Response>;
 
