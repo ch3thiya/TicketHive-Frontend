@@ -1,3 +1,4 @@
+import { GATEWAY_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { Badge } from '../components/Badge';
 import { ArrowLeft, Calendar, Clock, MapPin, ShieldAlert, ArrowRight, Lock } from 'lucide-react';
@@ -127,7 +128,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     const restoreActiveState = async () => {
       try {
         // 1. Check for an active hold first
-        const holdRes = await apiFetch(`/api/inventory/holds/active?showId=${activeShowId}`);
+        const holdRes = await apiFetch(`${GATEWAY_URL}/api/inventory/holds/active?showId=${activeShowId}`);
         if (holdRes.ok && holdRes.status === 200) {
           const holdData = await holdRes.json();
           const categories = event?.shows?.[0]?.ticketCategories || [
@@ -146,7 +147,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
         }
 
         // 2. Check for waiting room queue status if no active hold
-        const wrRes = await apiFetch(`/api/waiting-room/queues/${activeShowId}/entries/me`);
+        const wrRes = await apiFetch(`${GATEWAY_URL}/api/waiting-room/queues/${activeShowId}/entries/me`);
         if (wrRes.ok) {
           const wrData = await wrRes.json();
           if (wrData.status === 'Waiting') {
@@ -650,7 +651,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                       headers['Admission-Token'] = admissionToken;
                     }
 
-                    const res = await apiFetch(`/api/inventory/holds`, {
+                    const res = await apiFetch(`${GATEWAY_URL}/api/inventory/holds`, {
                       method: 'POST',
                       headers,
                       body: JSON.stringify({
@@ -729,7 +730,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
             setIsCreatingHold(true);
 
             try {
-              const res = await apiFetch(`/api/inventory/holds`, {
+              const res = await apiFetch(`${GATEWAY_URL}/api/inventory/holds`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -778,7 +779,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
           expiresAt={activeHold.expiresAt}
           onProceedToPayment={async () => {
             try {
-              const res = await apiFetch(`/api/booking/orders`, {
+              const res = await apiFetch(`${GATEWAY_URL}/api/booking/orders`, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -805,7 +806,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
           }}
           onCancelHold={async () => {
             try {
-              const res = await apiFetch(`/api/inventory/holds/${activeHold.holdId}`, {
+              const res = await apiFetch(`${GATEWAY_URL}/api/inventory/holds/${activeHold.holdId}`, {
                 method: 'DELETE',
               });
               if (res.ok || res.status === 204) {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { QrCode, CheckCircle2, AlertTriangle, XCircle, ArrowLeft, ShieldCheck, RefreshCw, History } from 'lucide-react';
+import { QrCode, CheckCircle2, AlertTriangle, XCircle, RefreshCw, History } from 'lucide-react';
 
 const BOOKING_API_URL = import.meta.env.VITE_BOOKING_API_URL || '';
 

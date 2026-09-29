@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { QRCodeSVG } from 'qrcode.react';
-import { Ticket as TicketIcon, QrCode, ArrowLeft, RefreshCw, CheckCircle2, Tag } from 'lucide-react';
+import { Ticket as TicketIcon, QrCode, RefreshCw, CheckCircle2, Tag } from 'lucide-react';
 import { Ticket } from '../components/Ticket';
 
 const BOOKING_API_URL = import.meta.env.VITE_BOOKING_API_URL || '';

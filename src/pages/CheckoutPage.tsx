@@ -1,3 +1,4 @@
+import { GATEWAY_URL } from '../config';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { CheckCircle2, AlertCircle, CreditCard, Lock, ArrowLeft } from 'lucide-react';
@@ -317,7 +318,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
         });
 
         if (!checkoutRes.ok) {
-          checkoutRes = await apiFetch(`/api/booking/orders/${orderId}/checkout`);
+          checkoutRes = await apiFetch(`${GATEWAY_URL}/api/booking/orders/${orderId}/checkout`);
         }
 
         if (checkoutRes.ok) {
