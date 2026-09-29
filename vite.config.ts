@@ -12,7 +12,6 @@ export default defineConfig({
   },
   server: {
     host: true,
-    allowedHosts: ['nice-things-lie.loca.lt'],
     proxy: {
       '/api/catalog': {
         target: process.env.VITE_CATALOG_API_URL || 'http://localhost:5142',

@@ -1,3 +1,4 @@
+import { GATEWAY_URL } from '../config';
 import React, { useEffect, useState } from 'react';
 
 interface QueueStatusData {
@@ -42,12 +43,12 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
       setErrorMsg(null);
 
       try {
-        await apiFetch(`/api/waiting-room/queues/${showId}/entries`, {
+        await apiFetch(`${GATEWAY_URL}/api/waiting-room/queues/${showId}/entries`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
 
-        const statusRes = await apiFetch(`/api/waiting-room/queues/${showId}/entries/me`);
+        const statusRes = await apiFetch(`${GATEWAY_URL}/api/waiting-room/queues/${showId}/entries/me`);
         if (statusRes.ok) {
           const data = await statusRes.json();
           if (!cancelled) {
@@ -78,7 +79,7 @@ export const WaitingRoomPopUp: React.FC<WaitingRoomPopUpProps> = ({
 
     const pollStatus = async () => {
       try {
-        const res = await apiFetch(`/api/waiting-room/queues/${showId}/entries/me`);
+        const res = await apiFetch(`${GATEWAY_URL}/api/waiting-room/queues/${showId}/entries/me`);
         if (res.ok) {
           const data = await res.json();
           if (!cancelled) {
