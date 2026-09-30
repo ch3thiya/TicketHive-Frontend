@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '../components/Button';
 import { useAuth } from '../auth/AuthContext';
-import { Menu, X } from 'lucide-react';
+import { AlignJustify, X } from 'lucide-react';
 
 interface NavbarProps {
   onSignUpClick: () => void;
@@ -176,7 +176,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             className="w-10 h-10 border-2 border-ink-black rounded-full flex items-center justify-center text-ink-black bg-brand-white shadow-[2px_2px_0px_0px_#0A0A0F] active:translate-x-px active:translate-y-px active:shadow-none transition-all cursor-pointer"
           >
-            {isMobileMenuOpen ? <X size={20} strokeWidth={2.5} /> : <Menu size={20} strokeWidth={2.5} />}
+            {isMobileMenuOpen ? <X size={20} strokeWidth={2.5} /> : <AlignJustify size={20} strokeWidth={2.5} />}
           </button>
         </div>
         

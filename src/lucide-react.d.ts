@@ -47,6 +47,7 @@ declare module 'lucide-react' {
   export const XCircle: Icon;
   export const ShieldCheck: Icon;
   export const History: Icon;
+  export const AlignJustify: Icon;
 
   export const icons: Record<string, Icon>;
 }
