@@ -270,9 +270,9 @@ export const Home: React.FC<HomeProps> = ({
       )}
 
       {/* Main Content Area */}
-      <div className="max-w-7xl mx-auto py-10 flex flex-col gap-10 w-full">
+      <div className="max-w-7xl mx-auto py-10 px-4 md:px-6 flex flex-col gap-10 w-full">
         {/* Minimal Neo-Brutalist Date Filter Bar */}
-        <section className="bg-brand-white border-3 border-ink-black rounded-full px-6 py-3.5 shadow-brutal-s flex flex-wrap items-center justify-between gap-4">
+        <section className="bg-brand-white border-3 border-ink-black rounded-2xl md:rounded-full px-4 md:px-6 py-4 shadow-brutal-s flex flex-col md:flex-row items-start md:items-center justify-between gap-4 w-full">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-brand-blue-light border-2 border-ink-black flex items-center justify-center text-brand-blue shrink-0">
               <Calendar size={16} />
@@ -282,14 +282,14 @@ export const Home: React.FC<HomeProps> = ({
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full md:w-auto">
             <CustomDatePicker
               label="From"
               value={fromDate}
               onChange={setFromDate}
             />
 
-            <span className="text-ink-gray-30 font-bold hidden sm:inline">•</span>
+            <span className="text-ink-gray-30 font-bold hidden sm:inline text-center">•</span>
 
             <CustomDatePicker
               label="To"
@@ -300,10 +300,10 @@ export const Home: React.FC<HomeProps> = ({
             {hasActiveFilters && (
               <button
                 onClick={handleClearFilters}
-                className="inline-flex items-center gap-1 text-xs font-body font-bold text-state-error hover:bg-red-50 border-2 border-ink-black rounded-full px-3 py-1.5 transition-all cursor-pointer ml-2 select-none"
+                className="inline-flex items-center justify-center gap-1 text-xs font-body font-bold text-state-error hover:bg-red-50 border-2 border-ink-black rounded-full px-4 py-2 sm:px-3 sm:py-1.5 transition-all cursor-pointer sm:ml-2 select-none w-full sm:w-auto mt-2 sm:mt-0"
               >
                 <X size={13} />
-                <span>Reset</span>
+                <span>Reset Filters</span>
               </button>
             )}
           </div>
