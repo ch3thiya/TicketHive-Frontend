@@ -111,8 +111,8 @@ export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ isOp
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center p-6 bg-[#0A0A0F]/60 backdrop-blur-sm transition-all duration-300">
-      <div className="bg-brand-white border-3 border-ink-black rounded-[32px] shadow-soft-3d w-full max-w-[700px] max-h-[90vh] overflow-y-auto p-8 relative flex flex-col animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 sm:p-6 bg-[#0A0A0F]/60 backdrop-blur-sm transition-all duration-300">
+      <div className="bg-brand-white border-3 border-ink-black rounded-[24px] sm:rounded-[32px] shadow-soft-3d w-full max-w-[700px] max-h-[95vh] overflow-y-auto p-5 sm:p-8 relative flex flex-col animate-in fade-in zoom-in duration-200">
         
         {/* Close Button */}
         <button
@@ -123,14 +123,13 @@ export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ isOp
           <span className="font-body font-bold text-sm text-ink-black select-none">✕</span>
         </button>
 
-      {/* Header Bar */}
-      <div className="flex items-center justify-between mb-8 pb-6 mt-2">
+      <div className="flex items-center justify-between mb-4 sm:mb-6 pb-4 sm:pb-5 mt-2">
         <div className="flex items-center gap-3">
           <div>
-            <h1 className="font-heading font-extrabold text-2xl text-ink-black flex items-center gap-2">
+            <h1 className="font-heading font-extrabold text-lg sm:text-xl text-ink-black flex items-center gap-2">
               <span>Organizer Ticket Validator</span>
             </h1>
-            <p className="font-body text-sm text-ink-gray-200 mt-1">
+            <p className="font-body text-xs sm:text-sm text-ink-gray-200 mt-1">
               Enter or Scan Ticket Code (e.g. TKT-XXXX-XXXX-XXXX)
             </p>
           </div>
@@ -138,7 +137,7 @@ export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ isOp
       </div>
 
       {/* Main Validation Input Card */}
-      <div className="bg-brand-white mb-8">
+      <div className="bg-brand-white mb-4 sm:mb-6">
         <form onSubmit={handleValidate} className="flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
@@ -147,19 +146,19 @@ export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ isOp
                 placeholder="TKT-XXXX-XXXX-XXXX"
                 value={ticketCode}
                 onChange={(e) => setTicketCode(e.target.value.toUpperCase())}
-                className="w-full bg-[#F9F9FF] border-3 border-ink-black rounded-24 px-5 py-4 font-mono text-xl font-bold text-brand-blue uppercase tracking-wider outline-none focus:ring-3 focus:ring-brand-blue/30 shadow-inner"
+                className="w-full bg-[#F9F9FF] border-3 border-ink-black rounded-full sm:rounded-2xl px-4 py-3 sm:px-5 font-mono text-lg font-bold text-brand-blue uppercase tracking-wider outline-none focus:ring-3 focus:ring-brand-blue/30 shadow-inner"
                 autoFocus
               />
-              <QrCode className="absolute right-4 top-1/2 -translate-y-1/2 text-ink-gray-70" size={24} />
+              <QrCode className="absolute right-4 top-1/2 -translate-y-1/2 text-ink-gray-70" size={20} />
             </div>
             <button
               type="submit"
               disabled={isValidating || !ticketCode.trim()}
-              className="bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-base py-4 px-8 rounded-24 border-3 border-ink-black shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shrink-0"
+              className="bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-sm sm:text-base py-3 px-6 rounded-full sm:rounded-2xl border-3 border-ink-black shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shrink-0"
             >
               {isValidating ? (
                 <>
-                  <RefreshCw size={20} className="animate-spin" />
+                  <RefreshCw size={16} className="animate-spin" />
                   <span>Validating…</span>
                 </>
               ) : (
@@ -175,17 +174,17 @@ export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ isOp
             
             {/* 🟢 VALID (AC1) */}
             {validationResult.status === 'valid' && (
-              <div className="bg-emerald-50 border-3 border-emerald-600 rounded-28 p-6 text-emerald-950 flex flex-col items-center text-center shadow-brutal-s">
-                <div className="w-16 h-16 rounded-full bg-emerald-500 border-2 border-ink-black flex items-center justify-center text-white mb-3 shadow-[2px_2px_0px_0px_#0A0A0F]">
-                  <CheckCircle2 size={36} strokeWidth={2.5} />
+              <div className="bg-emerald-50 border-3 border-emerald-600 rounded-2xl p-4 sm:p-5 text-emerald-950 flex flex-col items-center text-center shadow-brutal-s">
+                <div className="w-12 h-12 rounded-full bg-emerald-500 border-2 border-ink-black flex items-center justify-center text-white mb-2 shadow-[2px_2px_0px_0px_#0A0A0F]">
+                  <CheckCircle2 size={24} strokeWidth={2.5} />
                 </div>
-                <div className="font-heading font-extrabold text-2xl text-emerald-900 tracking-wide uppercase mb-1">
+                <div className="font-heading font-extrabold text-lg sm:text-xl text-emerald-900 tracking-wide uppercase mb-1">
                   TICKET VALID & REDEEMED!
                 </div>
-                <p className="font-body text-sm font-semibold text-emerald-800 mb-3">
+                <p className="font-body text-xs sm:text-sm font-semibold text-emerald-800 mb-3">
                   Attendee is authorized for entry. Ticket marked as used.
                 </p>
-                <div className="font-mono font-extrabold text-base bg-white border-2 border-emerald-600 rounded-16 px-4 py-2 text-emerald-900">
+                <div className="font-mono font-extrabold text-sm bg-white border-2 border-emerald-600 rounded-xl px-3 py-1.5 text-emerald-900">
                   CODE: {validationResult.code}
                 </div>
               </div>
@@ -193,17 +192,17 @@ export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ isOp
 
             {/* 🟡 ALREADY USED (AC2) */}
             {validationResult.status === 'used' && (
-              <div className="bg-amber-50 border-3 border-amber-500 rounded-28 p-6 text-amber-950 flex flex-col items-center text-center shadow-brutal-s">
-                <div className="w-16 h-16 rounded-full bg-amber-400 border-2 border-ink-black flex items-center justify-center text-amber-950 mb-3 shadow-[2px_2px_0px_0px_#0A0A0F]">
-                  <AlertTriangle size={36} strokeWidth={2.5} />
+              <div className="bg-amber-50 border-3 border-amber-500 rounded-2xl p-4 sm:p-5 text-amber-950 flex flex-col items-center text-center shadow-brutal-s">
+                <div className="w-12 h-12 rounded-full bg-amber-400 border-2 border-ink-black flex items-center justify-center text-amber-950 mb-2 shadow-[2px_2px_0px_0px_#0A0A0F]">
+                  <AlertTriangle size={24} strokeWidth={2.5} />
                 </div>
-                <div className="font-heading font-extrabold text-2xl text-amber-900 tracking-wide uppercase mb-1">
+                <div className="font-heading font-extrabold text-lg sm:text-xl text-amber-900 tracking-wide uppercase mb-1">
                   ALREADY USED / REDEEMED
                 </div>
-                <p className="font-body text-sm font-semibold text-amber-800 mb-3 max-w-md">
+                <p className="font-body text-xs sm:text-sm font-semibold text-amber-800 mb-3 max-w-md">
                   {validationResult.message}
                 </p>
-                <div className="font-mono font-extrabold text-base bg-white border-2 border-amber-500 rounded-16 px-4 py-2 text-amber-900">
+                <div className="font-mono font-extrabold text-sm bg-white border-2 border-amber-500 rounded-xl px-3 py-1.5 text-amber-900">
                   CODE: {validationResult.code}
                 </div>
               </div>
@@ -211,17 +210,17 @@ export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ isOp
 
             {/* 🔴 UNKNOWN / INVALID (AC3 & AC5) */}
             {validationResult.status === 'invalid' && (
-              <div className="bg-rose-50 border-3 border-rose-600 rounded-28 p-6 text-rose-950 flex flex-col items-center text-center shadow-brutal-s">
-                <div className="w-16 h-16 rounded-full bg-rose-500 border-2 border-ink-black flex items-center justify-center text-white mb-3 shadow-[2px_2px_0px_0px_#0A0A0F]">
-                  <XCircle size={36} strokeWidth={2.5} />
+              <div className="bg-rose-50 border-3 border-rose-600 rounded-2xl p-4 sm:p-5 text-rose-950 flex flex-col items-center text-center shadow-brutal-s">
+                <div className="w-12 h-12 rounded-full bg-rose-500 border-2 border-ink-black flex items-center justify-center text-white mb-2 shadow-[2px_2px_0px_0px_#0A0A0F]">
+                  <XCircle size={24} strokeWidth={2.5} />
                 </div>
-                <div className="font-heading font-extrabold text-2xl text-rose-900 tracking-wide uppercase mb-1">
+                <div className="font-heading font-extrabold text-lg sm:text-xl text-rose-900 tracking-wide uppercase mb-1">
                   NOT RECOGNISED / INVALID
                 </div>
-                <p className="font-body text-sm font-semibold text-rose-800 mb-3 max-w-md">
+                <p className="font-body text-xs sm:text-sm font-semibold text-rose-800 mb-3 max-w-md">
                   {validationResult.message}
                 </p>
-                <div className="font-mono font-extrabold text-base bg-white border-2 border-rose-600 rounded-16 px-4 py-2 text-rose-900">
+                <div className="font-mono font-extrabold text-sm bg-white border-2 border-rose-600 rounded-xl px-3 py-1.5 text-rose-900">
                   CODE: {validationResult.code}
                 </div>
               </div>
@@ -233,7 +232,7 @@ export const TicketValidationPage: React.FC<TicketValidationPageProps> = ({ isOp
 
       {/* Live Scan Log Table */}
       {scanHistory.length > 0 && (
-        <div className="bg-brand-white border-3 border-ink-black rounded-[32px] p-6 shadow-brutal-s">
+        <div className="hidden sm:block bg-brand-white border-3 border-ink-black rounded-[32px] p-6 shadow-brutal-s">
           <div className="flex items-center gap-2 mb-4 pb-3 border-b-2 border-ink-black">
             <History size={20} className="text-brand-blue" />
             <h3 className="font-heading font-bold text-lg text-ink-black">Session Scan History</h3>
