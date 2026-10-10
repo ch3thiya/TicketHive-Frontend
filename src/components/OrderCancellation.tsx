@@ -22,7 +22,14 @@ export function OrderCancellation({ orderId, cancelled = false, used = false, on
     const load = async () => {
       try {
         const response = await apiFetch(`${base}/cancellation`);
-        if (response.ok && active) setState(await response.json());
+        if (response.ok && active) {
+          const next: CancellationState = await response.json();
+          setState(next);
+          if (next.refundStatus !== 'Pending' && next.inventoryReturned &&
+              ['Sent', 'Simulated', 'NeedsReconciliation', 'MissingRecipient'].includes(next.notificationStatus)) {
+            window.clearInterval(timer);
+          }
+        }
         else if (response.status !== 404 && active) setError('Unable to refresh refund progress. We will retry.');
       } catch { if (active) setError('Unable to refresh refund progress. We will retry.'); }
     };

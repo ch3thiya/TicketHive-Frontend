@@ -38,4 +38,11 @@ describe('order cancellation', () => {
     expect(screen.getByText('CANCELLED')).toBeInTheDocument();
     expect(container.querySelector('svg')).toBeNull();
   });
+
+  it('exposes terminal email reconciliation without offering a resend', async () => {
+    apiFetch.mockResolvedValue(Response.json({ refundStatus: 'Simulated', inventoryReturned: true, notificationStatus: 'NeedsReconciliation' }));
+    render(<OrderCancellation orderId="order-4" cancelled />);
+    expect(await screen.findByText('Email delivery needs support review.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /resend/i })).not.toBeInTheDocument();
+  });
 });
