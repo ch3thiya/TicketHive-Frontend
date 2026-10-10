@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { ShowCancellationProgress } from '../components/ShowCancellationProgress';
 import {
   ArrowLeft,
   Calendar,
@@ -1266,6 +1267,7 @@ export const OrganizerDashboard: React.FC = () => {
                                 </span>
                               </div>
 
+                              {isShowCancelled && <ShowCancellationProgress showId={show.id} />}
                               {/* Show Config Meta */}
                               <div className="grid grid-cols-2 gap-2 text-[12px] text-ink-gray-70">
 

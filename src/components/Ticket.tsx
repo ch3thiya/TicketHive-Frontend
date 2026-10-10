@@ -15,6 +15,7 @@ interface TicketProps {
     price: number;
     customerName?: string;
     orderId: string;
+    voidedAt?: string | null;
   };
 }
 
@@ -87,7 +88,7 @@ export const Ticket: React.FC<TicketProps> = ({ eventDetails, ticketDetails }) =
       <div className="w-[180px] sm:w-[220px] bg-brand-blue-light/30 flex flex-col items-center justify-center p-6 shrink-0 relative">
 
         <div className="bg-white p-3 rounded-16 border-3 border-ink-black shadow-brutal-s flex items-center justify-center">
-          <QRCodeSVG value={`${window.location.origin}/?validate=${ticketDetails.uniqueCode}`} size={120} level="H" />
+          {ticketDetails.voidedAt ? <strong className="text-rose-700">CANCELLED</strong> : <QRCodeSVG value={`${window.location.origin}/?validate=${ticketDetails.uniqueCode}`} size={120} level="H" />}
         </div>
       </div>
     </div>
