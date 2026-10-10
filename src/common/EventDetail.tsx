@@ -6,6 +6,7 @@ import { fetchAvailability, AvailabilityNotFoundError, type AvailabilityEntry } 
 import { useAuth } from '../auth/AuthContext';
 import { WaitingRoomPopUp } from '../popUps/WaitingRoomPopUp';
 import { HoldConfirmationPopUp } from '../popUps/HoldConfirmationPopUp';
+import { SalesUnavailableNotice } from '../components/SalesUnavailableNotice';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
@@ -54,11 +55,21 @@ interface EventItem {
   status: string;
   createdAt: string;
   shows: ShowDetails[];
+  // Set by the catalog service while the organizer is suspended: sales are paused.
+  salesSuspended?: boolean;
 }
 
 interface EventDetailProps {
   eventId: string;
   onNavigateBack: () => void;
+}
+
+// Plain-English text for a refused hold. ProblemDetails.detail wins; 401 and 503 get fixed wording.
+function holdFailureMessage(status: number, body: { detail?: string; title?: string } | null, fallback: string): string {
+  if (body?.detail || body?.title) return body.detail || body.title || fallback;
+  if (status === 401) return 'Your session has expired. Please sign in again.';
+  if (status === 503) return 'Ticket sales could not be verified right now. Please try again shortly.';
+  return fallback;
 }
 
 export const EventDetail: React.FC<EventDetailProps> = ({
@@ -73,6 +84,9 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const [isWaitingRoomOpen, setIsWaitingRoomOpen] = useState(false);
   const [admissionToken, setAdmissionToken] = useState<string | null>(null);
   const [isCreatingHold, setIsCreatingHold] = useState(false);
+  const [holdError, setHoldError] = useState<string | null>(null);
+  // Set when the server refuses a hold because sales are paused, before the next page refresh.
+  const [salesBlocked, setSalesBlocked] = useState(false);
   const [activeHold, setActiveHold] = useState<{
     holdId: string;
     categoryName: string;
@@ -373,7 +387,9 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const activeSelectedId = hasExplicitSelection ? selectedTicketId : defaultCategoryId;
 
   const isSelectedCategorySoldOut = activeSelectedId !== null && availabilityMap[activeSelectedId]?.available === 0;
-  const isBuyDisabled = allCategoriesSoldOut || isSelectedCategorySoldOut;
+  // A customer already holding tickets can still resume their checkout; only new holds are blocked.
+  const salesUnavailable = (displayEvent.salesSuspended === true || salesBlocked) && !activeHold;
+  const isBuyDisabled = allCategoriesSoldOut || isSelectedCategorySoldOut || salesUnavailable;
 
   const eventVenue = displayEvent.venue || activeShow?.venueName || 'Madison Square Garden, NYC';
   const eventDate = displayEvent.eventDate || activeShow?.showDate || '2026-09-12';
@@ -548,6 +564,8 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 Select Tickets
               </h3>
 
+              {salesUnavailable && <SalesUnavailableNotice />}
+
               {activeHold && !isHoldConfirmationOpen && (
                 <div className="bg-amber-50 border-2 border-amber-400 rounded-2xl p-4 flex flex-col gap-2 shadow-[2px_2px_0px_0px_#0A0A0F]">
                   <div className="flex items-center justify-between">
@@ -624,6 +642,12 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 })}
               </div>
 
+              {holdError && (
+                <div role="alert" className="bg-red-50 border-2 border-red-500 rounded-2xl p-3 text-[#FF3B3B] font-body font-medium text-sm">
+                  {holdError}
+                </div>
+              )}
+
               {/* Buy Now Primary Button */}
               <button
                 onClick={async () => {
@@ -640,6 +664,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                   const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
                   const catId = getCategoryId(selectedCat, 0);
 
+                  setHoldError(null);
                   setIsCreatingHold(true);
 
                   try {
@@ -675,12 +700,12 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                       if (res.status === 403) {
                         setIsWaitingRoomOpen(true);
                       } else {
-                        alert(err?.detail || err?.title || 'Unable to place hold on this ticket.');
+                        if (res.status === 409 && err?.title === 'Sales unavailable') setSalesBlocked(true);
+                        setHoldError(holdFailureMessage(res.status, err, 'Unable to place hold on this ticket.'));
                       }
                     }
-                  } catch (err) {
-                    console.error('Hold error:', err);
-                    alert('Network error while placing ticket hold.');
+                  } catch {
+                    setHoldError('Network error while placing ticket hold.');
                   } finally {
                     setIsCreatingHold(false);
                   }
@@ -755,7 +780,8 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 setIsHoldConfirmationOpen(true);
               } else {
                 const err = await res.json().catch(() => null);
-                alert(err?.detail || err?.title || 'Unable to place hold on this ticket after queue admission.');
+                if (res.status === 409 && err?.title === 'Sales unavailable') setSalesBlocked(true);
+                setHoldError(holdFailureMessage(res.status, err, 'Unable to place hold on this ticket after queue admission.'));
               }
             } catch (err) {
               console.error('Hold error:', err);
