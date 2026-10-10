@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { CheckCircle2, AlertCircle, CreditCard, Lock, ArrowLeft } from 'lucide-react';
 import { Ticket } from '../components/Ticket';
+import { OrderCancellation } from '../components/OrderCancellation';
 
 const BOOKING_API_URL = import.meta.env.VITE_BOOKING_API_URL || '';
 const PAYMENT_API_URL = import.meta.env.VITE_PAYMENT_API_URL || BOOKING_API_URL;
@@ -415,7 +416,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
               setTicketDetails(matchedTicket);
             }
           }
-        } catch (e) { }
+        } catch { /* The order remains visible if ticket retrieval temporarily fails. */ }
       };
       fetchTicket();
     }
@@ -479,6 +480,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     );
   }
 
+  if (orderStatus.status === 'Cancelled') {
+    return <div className="max-w-xl mx-auto p-8">
+      <h1 className="text-2xl font-bold">Order cancelled</h1>
+      <OrderCancellation orderId={orderId} cancelled />
+      <button onClick={onNavigateHome} className="mt-6">Return to events</button>
+    </div>;
+  }
+
   if (orderStatus.status === 'Confirmed') {
     return (
       <div className="min-h-[calc(100vh-80px)] w-full flex flex-col animate-in fade-in zoom-in duration-300 max-w-7xl mx-auto items-center justify-center px-6">
@@ -524,6 +533,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
               </p>
 
               <div className="mt-auto w-full flex flex-col gap-3">
+                <OrderCancellation orderId={orderId} onCancelled={() => setOrderStatus({ ...orderStatus, status: 'Cancelled' })} />
                 <button
                   onClick={() => {
                     window.history.pushState({}, '', '/my-tickets');

@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { Ticket as TicketIcon, QrCode, RefreshCw, CheckCircle2, Tag } from 'lucide-react';
 import { Ticket } from '../components/Ticket';
+import { OrderCancellation } from '../components/OrderCancellation';
 
 const BOOKING_API_URL = import.meta.env.VITE_BOOKING_API_URL || '';
 
@@ -16,6 +17,7 @@ interface TicketItem {
   issuedAt: string;
   usedAt: string | null;
   usedBy: string | null;
+  voidedAt: string | null;
 }
 
 interface MyTicketsPageProps {
@@ -28,7 +30,7 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTicket, setSelectedTicket] = useState<TicketItem | null>(null);
-  const [filter, setFilter] = useState<'all' | 'valid' | 'used'>('all');
+  const [filter, setFilter] = useState<'all' | 'valid' | 'used' | 'cancelled'>('all');
   const [events, setEvents] = useState<any[]>([]);
 
   useEffect(() => {
@@ -39,12 +41,12 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
           const data = await res.json();
           setEvents(data);
         }
-      } catch (err) {}
+      } catch { /* Tickets remain available when event metadata cannot load. */ }
     };
     fetchAllEvents();
   }, []);
 
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     setIsLoading(true);
     setError(null);
 
@@ -62,7 +64,7 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [apiFetch]);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -70,11 +72,29 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
     } else {
       setIsLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, fetchTickets]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let active = true;
+    const timer = window.setInterval(async () => {
+      try {
+        const response = await apiFetch(`${BOOKING_API_URL}/api/booking/tickets`);
+        if (!response.ok) return;
+        const next: TicketItem[] = await response.json();
+        if (active) {
+          setTickets(next);
+          setSelectedTicket(current => current && !next.find(ticket => ticket.id === current.id)?.voidedAt ? current : null);
+        }
+      } catch { /* The refresh action remains available while offline. */ }
+    }, 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [apiFetch, isAuthenticated]);
 
   const filteredTickets = tickets.filter((t) => {
-    if (filter === 'valid') return !t.usedAt;
+    if (filter === 'valid') return !t.usedAt && !t.voidedAt;
     if (filter === 'used') return Boolean(t.usedAt);
+    if (filter === 'cancelled') return Boolean(t.voidedAt);
     return true;
   });
 
@@ -135,7 +155,7 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
                 : 'bg-brand-white text-ink-black hover:bg-[#F9F9FF]'
             }`}
           >
-            Valid ({tickets.filter((t) => !t.usedAt).length})
+            Valid ({tickets.filter((t) => !t.usedAt && !t.voidedAt).length})
           </button>
           <button
             onClick={() => setFilter('used')}
@@ -146,6 +166,9 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
             }`}
           >
             Used ({tickets.filter((t) => t.usedAt).length})
+          </button>
+          <button onClick={() => setFilter('cancelled')} className="font-bold text-xs py-2 px-5 rounded-full border-2 border-ink-black">
+            Cancelled ({tickets.filter(t => t.voidedAt).length})
           </button>
         </div>
       )}
@@ -197,6 +220,7 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTickets.map((t) => {
             const isUsed = Boolean(t.usedAt);
+            const isCancelled = Boolean(t.voidedAt);
             const matchedEvent = events.find((e) => e.shows?.some((s: any) => s.id === t.showId));
             const matchedShow = matchedEvent?.shows?.find((s: any) => s.id === t.showId);
 
@@ -212,7 +236,7 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
                   <div className="w-full h-32 mb-4 rounded-20 overflow-hidden border-2 border-ink-black shrink-0 relative bg-ink-gray-30">
                     <img src={matchedEvent.coverImageUrl || matchedEvent.coverUrl || matchedEvent.bannerUrl || matchedEvent.imageUrl} alt={matchedEvent.name} className="w-full h-full object-cover" />
                     <div className="absolute top-2 right-2">
-                      {isUsed ? (
+                      {isCancelled ? <strong className="bg-rose-100 text-rose-800 px-3 py-1">CANCELLED</strong> : isUsed ? (
                         <span className="bg-ink-gray-30 text-ink-gray-70 border border-ink-black font-heading font-extrabold text-[11px] px-3 py-1 rounded-full uppercase shadow-sm">
                           USED
                         </span>
@@ -235,7 +259,7 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
                         E-Ticket
                       </span>
                     </div>
-                    {isUsed ? (
+                    {isCancelled ? <strong className="text-rose-800">CANCELLED</strong> : isUsed ? (
                       <span className="bg-ink-gray-30 text-ink-gray-70 border border-ink-black font-heading font-extrabold text-[11px] px-3 py-1 rounded-full uppercase">
                         REDEEMED / USED
                       </span>
@@ -299,11 +323,16 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
                 {/* Show QR Code Action Button */}
                 <button
                   onClick={() => setSelectedTicket(t)}
+                  disabled={isCancelled}
                   className="w-full bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold text-sm py-3 px-5 rounded-full border-2 border-ink-black shadow-[3px_3px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 transition-all cursor-pointer flex items-center justify-center gap-2"
                 >
                   <QrCode size={18} />
                   <span>Show Ticket</span>
                 </button>
+                {tickets.find(ticket => ticket.orderId === t.orderId)?.id === t.id &&
+                  <OrderCancellation orderId={t.orderId} cancelled={isCancelled}
+                    used={tickets.some(ticket => ticket.orderId === t.orderId && Boolean(ticket.usedAt))}
+                    onCancelled={() => { setSelectedTicket(null); void fetchTickets(); }} />}
               </div>
             );
           })}

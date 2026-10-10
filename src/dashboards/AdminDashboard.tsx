@@ -3,6 +3,9 @@ import { useAuth } from '../auth/AuthContext';
 import { ArrowLeft, MapPin, Plus, Edit3, Trash2 } from 'lucide-react';
 import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
 import { VenueFormPopUp } from '../popUps/VenueFormPopUp';
+import { SuspendOrganizerPopUp } from '../popUps/SuspendOrganizerPopUp';
+import { OrganizerStatusBadge } from '../components/OrganizerStatusBadge';
+import { fetchOrganizers, suspendOrganizer, reinstateOrganizer, type AdminOrganizer } from '../common/organizerAdminApi';
 import { fetchVenues, createVenue, updateVenue, deleteVenue, type Venue, type VenueInput } from '../common/venueApi';
 
 interface PendingRequest {
@@ -32,8 +35,14 @@ export const AdminDashboard: React.FC = () => {
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   
   // Approved organizers list states
-  const [organizers, setOrganizers] = useState<Array<{ organizationName?: string; businessEmail?: string; eventType?: string; fullName?: string; email?: string }>>([]);
+  const [organizers, setOrganizers] = useState<AdminOrganizer[]>([]);
   const [orgsLoading, setOrgsLoading] = useState(true);
+  const [orgsError, setOrgsError] = useState<string | null>(null);
+  const [orgActionError, setOrgActionError] = useState<string | null>(null);
+  const [reinstatingId, setReinstatingId] = useState<string | null>(null);
+  const [suspendTarget, setSuspendTarget] = useState<AdminOrganizer | null>(null);
+  const [suspendLoading, setSuspendLoading] = useState(false);
+  const [suspendError, setSuspendError] = useState<string | null>(null);
 
   // Custom neo-brutalist delete modal states
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -78,17 +87,49 @@ export const AdminDashboard: React.FC = () => {
 
   const fetchApprovedOrganizers = useCallback(async () => {
     try {
-      const response = await apiFetch(`${API_BASE_URL}/api/identity/organizer-requests/organizers`);
-      if (response.ok) {
-        const data = await response.json();
-        setOrganizers(data);
-      }
+      const data = await fetchOrganizers(apiFetch);
+      setOrganizers(data);
+      setOrgsError(null);
     } catch (err) {
-      console.error('Failed to fetch organizers:', err);
+      setOrgsError(err instanceof Error ? err.message : 'Failed to load organizers.');
     } finally {
       setOrgsLoading(false);
     }
   }, [apiFetch]);
+
+  const openSuspendDialog = (organizer: AdminOrganizer) => {
+    setSuspendError(null);
+    setOrgActionError(null);
+    setSuspendTarget(organizer);
+  };
+
+  const handleSuspendConfirm = async (reason: string) => {
+    if (!suspendTarget) return;
+    setSuspendLoading(true);
+    setSuspendError(null);
+    try {
+      await suspendOrganizer(apiFetch, suspendTarget.accountId, reason);
+      setSuspendTarget(null);
+      await fetchApprovedOrganizers();
+    } catch (err) {
+      setSuspendError(err instanceof Error ? err.message : 'Failed to suspend the organizer.');
+    } finally {
+      setSuspendLoading(false);
+    }
+  };
+
+  const handleReinstate = async (organizer: AdminOrganizer) => {
+    setReinstatingId(organizer.accountId);
+    setOrgActionError(null);
+    try {
+      await reinstateOrganizer(apiFetch, organizer.accountId);
+      await fetchApprovedOrganizers();
+    } catch (err) {
+      setOrgActionError(err instanceof Error ? err.message : 'Failed to reinstate the organizer.');
+    } finally {
+      setReinstatingId(null);
+    }
+  };
 
   const fetchVenuesList = useCallback(async () => {
     setVenuesLoading(true);
@@ -356,8 +397,28 @@ export const AdminDashboard: React.FC = () => {
             Current Organizers
           </h2>
 
+          {orgsError && (
+            <div role="alert" className="bg-red-50 border-2 border-red-500 rounded-16 p-4 mb-6 text-[#FF3B3B] font-medium text-sm">
+              {orgsError}
+            </div>
+          )}
+
+          {orgActionError && (
+            <div role="alert" className="bg-red-50 border-2 border-red-500 rounded-16 p-4 mb-6 text-[#FF3B3B] font-medium text-sm flex items-center justify-between gap-4">
+              <span>{orgActionError}</span>
+              <button
+                type="button"
+                onClick={() => setOrgActionError(null)}
+                aria-label="Dismiss error"
+                className="font-bold text-ink-black cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
           {orgsLoading ? (
-            <div className="py-8 flex justify-center">
+            <div className="py-8 flex justify-center" role="status" aria-label="Loading organizers">
               <div className="w-10 h-10 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
             </div>
           ) : organizers.length === 0 ? (
@@ -365,29 +426,61 @@ export const AdminDashboard: React.FC = () => {
               <p className="font-body text-ink-gray-70 font-medium">No approved organizers yet.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {organizers.map((org, idx) => (
-                <div 
-                  key={idx}
-                  className="bg-[#F9F9FC] border-2 border-ink-gray-30 rounded-20 p-5 flex items-center justify-between gap-4 shadow-sm"
-                >
-                  <div className="flex-1">
-                    <h3 className="font-body font-bold text-[15px] text-ink-black mb-0.5">
-                      {org.organizationName || org.fullName}
-                    </h3>
-                    <p className="font-body text-[12px] text-ink-gray-70">
-                      {org.businessEmail || org.email} · {org.eventType || 'All Events'}
-                    </p>
-                  </div>
-                  <div className="bg-brand-blue-light text-brand-blue text-[12px] font-bold px-4 py-1.5 rounded-full border-2 border-ink-black shrink-0">
-                    Active
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ul className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {organizers.map((org) => {
+                const name = org.organizationName || org.fullName;
+                const suspended = org.status === 'suspended';
+                return (
+                  <li
+                    key={org.accountId}
+                    className="bg-[#F9F9FC] border-2 border-ink-gray-30 rounded-20 p-5 flex flex-col gap-4 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <h3 className="font-body font-bold text-[15px] text-ink-black mb-0.5">{name}</h3>
+                        <p className="font-body text-[12px] text-ink-gray-70">
+                          {org.businessEmail || org.email} · {org.eventType || 'All Events'}
+                        </p>
+                      </div>
+                      <OrganizerStatusBadge status={org.status} />
+                    </div>
+
+                    {suspended && (
+                      <p className="font-body text-[12px] text-ink-gray-70">
+                        Suspended
+                        {org.suspendedAt ? ` on ${new Date(org.suspendedAt).toLocaleDateString()}` : ''}
+                        {org.suspensionReason ? `: ${org.suspensionReason}` : ''}
+                      </p>
+                    )}
+
+                    <div>
+                      {suspended ? (
+                        <button
+                          type="button"
+                          onClick={() => handleReinstate(org)}
+                          disabled={reinstatingId === org.accountId}
+                          aria-label={`Reinstate ${name}`}
+                          className="font-body font-bold text-[13px] text-ink-black bg-brand-white border-2.5 border-ink-black rounded-full px-4 py-2 hover:bg-brand-blue-light active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none disabled:opacity-50"
+                        >
+                          {reinstatingId === org.accountId ? 'Reinstating...' : 'Reinstate'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openSuspendDialog(org)}
+                          aria-label={`Suspend ${name}`}
+                          className="font-body font-bold text-[13px] text-[#FF3B3B] bg-brand-white border-2.5 border-ink-black rounded-full px-4 py-2 hover:bg-red-50 active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none"
+                        >
+                          Suspend
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
-
         {/* 4. Managed Venues Card Box */}
         <div className="bg-brand-white border-3 border-ink-black rounded-28 p-8 shadow-soft-3d">
           <div className="flex items-center justify-between mb-6">
@@ -491,6 +584,17 @@ export const AdminDashboard: React.FC = () => {
       />
 
       {/* 6. Venue Create/Edit Modal */}
+      {suspendTarget && (
+        <SuspendOrganizerPopUp
+          key={suspendTarget.accountId}
+          organizerName={suspendTarget.organizationName || suspendTarget.fullName}
+          isLoading={suspendLoading}
+          error={suspendError}
+          onClose={() => setSuspendTarget(null)}
+          onConfirm={handleSuspendConfirm}
+        />
+      )}
+
       <VenueFormPopUp
         isOpen={isVenueFormOpen}
         onClose={() => setIsVenueFormOpen(false)}

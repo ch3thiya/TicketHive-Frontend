@@ -37,6 +37,7 @@ interface EventItem {
   status: string;
   createdAt: string;
   shows: ShowDetails[];
+  salesSuspended?: boolean;
 }
 
 interface HomeProps {
@@ -394,6 +395,7 @@ export const Home: React.FC<HomeProps> = ({
                   image={evt.bannerUrl}
                   price={getLowestPrice(evt)}
                   venue={getVenueLabel(evt)}
+                  salesPaused={evt.salesSuspended === true}
                   onClick={() => onSelectEvent?.(evt.id)}
                 />
               ))}

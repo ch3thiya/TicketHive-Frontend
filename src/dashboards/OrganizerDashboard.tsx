@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { ShowCancellationProgress } from '../components/ShowCancellationProgress';
 import {
   ArrowLeft,
   Calendar,
@@ -24,6 +25,9 @@ import { AddShowPopUp } from '../popUps/AddShowPopUp';
 import { EditShowPopUp } from '../popUps/EditShowPopUp';
 import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
 import { fetchVenues, type Venue } from '../common/venueApi';
+import { fetchOrganizerAccessStatus } from '../common/organizerStatusApi';
+import type { ProblemDetailsBody } from '../common/problemDetails';
+import { SuspendedOrganizerBanner } from '../components/SuspendedOrganizerBanner';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
@@ -78,6 +82,9 @@ export const OrganizerDashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  // A suspended organizer can still read their events but every write is refused by the backend.
+  const [isSuspended, setIsSuspended] = useState(false);
+  const suspendedHint = isSuspended ? 'Unavailable while your account is suspended' : undefined;
 
   // Modals
   const [isCreateEventOpen, setIsCreateEventOpen] = useState(false);
@@ -145,6 +152,13 @@ export const OrganizerDashboard: React.FC = () => {
     }
   };
 
+  // Reads the backend's answer for a failed write. A 403 with the OrganizerSuspended code means the
+  // account was suspended after this page loaded, so the page switches to its read-only state.
+  const errorMessage = (data: ProblemDetailsBody | null): string | undefined => {
+    if (data?.code === 'OrganizerSuspended') setIsSuspended(true);
+    return data?.detail || data?.message;
+  };
+
   // Fetch organizer events
   const fetchEvents = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -186,9 +200,14 @@ export const OrganizerDashboard: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated && role === 'organizer') {
       fetchEvents();
+      fetchOrganizerAccessStatus(apiFetch)
+        .then((status) => setIsSuspended(status === 'suspended'))
+        .catch(() => {
+          // Writes are still enforced by the backend; the banner is only a courtesy.
+        });
       fetchVenuesList();
     }
-  }, [isAuthenticated, role, fetchEvents, fetchVenuesList]);
+  }, [isAuthenticated, role, apiFetch, fetchEvents, fetchVenuesList]);
 
   // Image Upload helper
   const handleImageChange = (
@@ -290,7 +309,7 @@ export const OrganizerDashboard: React.FC = () => {
         const errorData = await res.json().catch(() => null);
 
         showNotification(
-          errorData?.message || 'Failed to create event.',
+          errorMessage(errorData) || 'Failed to create event.',
           true
         );
       }
@@ -352,7 +371,7 @@ export const OrganizerDashboard: React.FC = () => {
         const errorData = await res.json().catch(() => null);
 
         showNotification(
-          errorData?.message || 'Failed to update event.',
+          errorMessage(errorData) || 'Failed to update event.',
           true
         );
       }
@@ -397,7 +416,7 @@ export const OrganizerDashboard: React.FC = () => {
           } else {
             const errorData = await res.json().catch(() => null);
             showNotification(
-              errorData?.message || 'Failed to cancel event.',
+              errorMessage(errorData) || 'Failed to cancel event.',
               true
             );
           }
@@ -440,7 +459,7 @@ export const OrganizerDashboard: React.FC = () => {
           } else {
             const errorData = await res.json().catch(() => null);
             showNotification(
-              errorData?.detail || errorData?.message || 'Failed to delete event.',
+              errorMessage(errorData) || 'Failed to delete event.',
               true
             );
           }
@@ -476,7 +495,7 @@ export const OrganizerDashboard: React.FC = () => {
         const errorData = await res.json().catch(() => null);
 
         showNotification(
-          errorData?.message ||
+          errorMessage(errorData) ||
             'Failed to publish event. Ensure at least one active show and ticket category exists.',
           true
         );
@@ -635,7 +654,7 @@ export const OrganizerDashboard: React.FC = () => {
         const errorData = await res.json().catch(() => null);
 
         showNotification(
-          errorData?.message || 'Failed to create show.',
+          errorMessage(errorData) || 'Failed to create show.',
           true
         );
       }
@@ -707,7 +726,7 @@ export const OrganizerDashboard: React.FC = () => {
         const errorData = await res.json().catch(() => null);
 
         showNotification(
-          errorData?.message || 'Failed to update show.',
+          errorMessage(errorData) || 'Failed to update show.',
           true
         );
       }
@@ -748,7 +767,7 @@ export const OrganizerDashboard: React.FC = () => {
           } else {
             const errorData = await res.json().catch(() => null);
             showNotification(
-              errorData?.message || 'Failed to cancel show.',
+              errorMessage(errorData) || 'Failed to cancel show.',
               true
             );
           }
@@ -927,7 +946,9 @@ export const OrganizerDashboard: React.FC = () => {
       )}
 
       {/* 2. Main Content */}
-      <main className="flex-grow max-w-8xl w-full mx-auto px-6 py-8">
+      <main className="flex-grow max-w-8xl w-full mx-auto px-6 py-8 [&_button:disabled]:opacity-50 [&_button:disabled]:cursor-not-allowed">
+
+        {isSuspended && <SuspendedOrganizerBanner />}
 
         {/* Header CTA */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
@@ -942,6 +963,8 @@ export const OrganizerDashboard: React.FC = () => {
               resetEventForm();
               setIsCreateEventOpen(true);
             }}
+disabled={isSuspended}
+title={suspendedHint}
             className="font-body font-bold text-[14px] text-ink-black bg-[#FFE94D] border-3 border-ink-black rounded-full px-6 py-3 hover:bg-[#F3DC3C] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F] flex items-center gap-2"
           >
             <Plus size={16} strokeWidth={3} />
@@ -978,6 +1001,8 @@ export const OrganizerDashboard: React.FC = () => {
                 resetEventForm();
                 setIsCreateEventOpen(true);
               }}
+disabled={isSuspended}
+title={suspendedHint}
               className="font-body font-bold text-sm bg-brand-blue text-brand-white border-2.5 border-ink-black rounded-full px-6 py-2.5 shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all cursor-pointer"
             >
               Create First Event
@@ -1054,7 +1079,7 @@ export const OrganizerDashboard: React.FC = () => {
                           onClick={() =>
                             handlePublishEvent(evt.id)
                           }
-                          disabled={!hasCategories || isLoading}
+                          disabled={!hasCategories || isLoading || isSuspended}
                           title={
                             !hasCategories
                               ? 'Event requires at least one show with ticket categories before publishing'
@@ -1072,6 +1097,8 @@ export const OrganizerDashboard: React.FC = () => {
                           onClick={() =>
                             openEditEventModal(evt)
                           }
+disabled={isSuspended}
+title={suspendedHint}
                           className="font-body font-bold text-[13px] text-ink-black bg-brand-white border-2 border-ink-black rounded-full px-3.5 py-1.5 hover:bg-brand-blue-light transition-all cursor-pointer shadow-sm flex items-center gap-1.5 select-none"
                         >
                           <Edit3 size={13} />
@@ -1087,6 +1114,8 @@ export const OrganizerDashboard: React.FC = () => {
                               evt.name
                             )
                           }
+disabled={isSuspended}
+title={suspendedHint}
                           className="font-body font-bold text-[13px] text-[#FF3B3B] bg-brand-white border-2 border-ink-black rounded-full px-3.5 py-1.5 hover:bg-red-50 transition-all cursor-pointer shadow-sm flex items-center gap-1.5 select-none"
                         >
                           <Ban size={13} />
@@ -1102,6 +1131,8 @@ export const OrganizerDashboard: React.FC = () => {
                               evt.name
                             )
                           }
+disabled={isSuspended}
+title={suspendedHint}
                           className="font-body font-bold text-[13px] text-white bg-[#E02F2F] hover:bg-[#b82222] border-2 border-ink-black rounded-full px-3.5 py-1.5 transition-all cursor-pointer shadow-brutal-s flex items-center gap-1.5 select-none hover:-translate-x-0.5 hover:-translate-y-0.5"
                         >
                           <Trash2 size={13} />
@@ -1197,6 +1228,8 @@ export const OrganizerDashboard: React.FC = () => {
                           onClick={() =>
                             openAddShowModal(evt)
                           }
+disabled={isSuspended}
+title={suspendedHint}
                           className="font-body font-bold text-[12px] text-brand-blue bg-brand-white border-2 border-ink-black rounded-full px-3.5 py-1 hover:bg-brand-blue-light transition-all cursor-pointer flex items-center gap-1 shadow-sm select-none"
                         >
                           <Plus
@@ -1266,6 +1299,7 @@ export const OrganizerDashboard: React.FC = () => {
                                 </span>
                               </div>
 
+                              {isShowCancelled && <ShowCancellationProgress showId={show.id} />}
                               {/* Show Config Meta */}
                               <div className="grid grid-cols-2 gap-2 text-[12px] text-ink-gray-70">
 
@@ -1386,6 +1420,8 @@ export const OrganizerDashboard: React.FC = () => {
                                           show
                                         )
                                       }
+disabled={isSuspended}
+title={suspendedHint}
                                       className="text-xs font-bold text-ink-black hover:text-brand-blue flex items-center gap-1 cursor-pointer py-1 px-2"
                                     >
                                       <Edit3 size={12} />
@@ -1398,6 +1434,8 @@ export const OrganizerDashboard: React.FC = () => {
                                           show.id
                                         )
                                       }
+disabled={isSuspended}
+title={suspendedHint}
                                       className="text-xs font-bold text-state-error hover:text-red-700 flex items-center gap-1 cursor-pointer py-1 px-2"
                                     >
                                       <Ban size={12} />
