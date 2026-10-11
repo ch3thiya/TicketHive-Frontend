@@ -13,6 +13,24 @@ interface CheckoutPageProps {
   onNavigateHome: () => void;
 }
 
+// The part of a ticket the confirmation page reads; the rest is passed through to the ticket.
+interface OrderTicket {
+  id?: string;
+  orderId: string;
+  uniqueCode: string;
+  voidedAt?: string | null;
+  categoryId?: string;
+  price: number;
+  seat?: { section: string; row: string; number: number } | null;
+  [key: string]: unknown;
+}
+
+interface ShowCategory {
+  id?: string;
+  categoryId?: string;
+  name: string;
+}
+
 interface OrderStatusResponse {
   orderId: string;
   status: 'PaymentPending' | 'Confirmed' | 'Failed' | 'Cancelled';
@@ -60,7 +78,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   const [eventDetails, setEventDetails] = useState<any | null>(null);
   const [ticketDetails, setTicketDetails] = useState<any | null>(null);
   // Every ticket of the order: a seated order has one ticket (and seat) per seat chosen.
-  const [orderTickets, setOrderTickets] = useState<any[]>([]);
+  const [orderTickets, setOrderTickets] = useState<OrderTicket[]>([]);
 
   const isEmail = (val: unknown): val is string =>
     typeof val === 'string' && val.includes('@') && val.includes('.');
@@ -414,7 +432,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
           const res = await apiFetch(`${BOOKING_API_URL}/api/booking/tickets`);
           if (res.ok) {
             const data = await res.json();
-            const mine = data.filter((t: any) => t.orderId === orderId);
+            const mine = (data as OrderTicket[]).filter((t) => t.orderId === orderId);
             if (mine.length > 0) {
               setTicketDetails(mine[0]);
               setOrderTickets(mine);
@@ -501,13 +519,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
           <div className="w-full lg:w-2/3 flex flex-col justify-center">
             {ticketDetails && eventDetails && (
               <div className="flex flex-col gap-8">
-                {(orderTickets.length > 0 ? orderTickets : [ticketDetails]).map((ticket: any, index: number, all: any[]) => (
+                {(orderTickets.length > 0 ? orderTickets : [ticketDetails]).map((ticket: OrderTicket, index: number, all: OrderTicket[]) => (
                   <Ticket
                     key={ticket.id ?? index}
                     eventDetails={{
                       ...eventDetails,
                       categoryName:
-                        eventDetails.categories?.find((c: any) => c.id === ticket.categoryId || c.categoryId === ticket.categoryId)?.name ??
+                        (eventDetails.categories as ShowCategory[] | undefined)?.find((c) => c.id === ticket.categoryId || c.categoryId === ticket.categoryId)?.name ??
                         eventDetails.categoryName,
                     }}
                     ticketDetails={{
