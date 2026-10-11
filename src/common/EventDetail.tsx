@@ -640,6 +640,11 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 </p>
               )}
 
+              {isSeatedShow && holdError && (
+                <div role="alert" className="bg-red-50 border-2 border-red-500 rounded-2xl p-3 text-[#FF3B3B] font-body font-medium text-sm">
+                  {holdError}
+                </div>
+              )}
               {isSeatedShow && activeShowId ? (
                 <SeatSelection
                   showId={activeShowId}
