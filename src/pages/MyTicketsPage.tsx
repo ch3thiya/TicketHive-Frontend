@@ -18,6 +18,7 @@ interface TicketItem {
   usedAt: string | null;
   usedBy: string | null;
   voidedAt: string | null;
+  seat?: { section: string; row: string; number: number } | null;
 }
 
 interface MyTicketsPageProps {
@@ -296,6 +297,14 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
 
                 {/* Details */}
                 <div className="flex flex-col gap-2 mb-6 font-body text-xs text-ink-gray-70">
+                  {t.seat && (
+                    <div className="flex justify-between items-center pb-2 border-b border-ink-gray-30">
+                      <span className="font-bold">Seat</span>
+                      <span className="font-bold text-ink-black">
+                        {t.seat.section} · Row {t.seat.row} · Seat {t.seat.number}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center pb-2 border-b border-ink-gray-30">
                     <span className="font-bold">Price Paid</span>
                     <span className="font-heading font-bold text-sm text-ink-black">
@@ -355,7 +364,7 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
             {(() => {
               const matchedEvent = events.find((e) => e.shows?.some((s: any) => s.id === selectedTicket.showId));
               const matchedShow = matchedEvent?.shows?.find((s: any) => s.id === selectedTicket.showId);
-              const category = matchedEvent?.ticketCategories?.find((c: any) => c.id === selectedTicket.categoryId || c.categoryId === selectedTicket.categoryId);
+              const category = (matchedShow?.ticketCategories ?? matchedEvent?.ticketCategories)?.find((c: any) => c.id === selectedTicket.categoryId || c.categoryId === selectedTicket.categoryId);
               
               if (!matchedEvent || !matchedShow) return null;
               

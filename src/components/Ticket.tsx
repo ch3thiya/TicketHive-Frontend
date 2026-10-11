@@ -16,6 +16,8 @@ interface TicketProps {
     customerName?: string;
     orderId: string;
     voidedAt?: string | null;
+    // Present for tickets on seated shows.
+    seat?: { section: string; row: string; number: number } | null;
   };
 }
 
@@ -46,6 +48,11 @@ export const Ticket: React.FC<TicketProps> = ({ eventDetails, ticketDetails }) =
             <span className="font-body text-xs sm:text-sm font-bold text-brand-blue uppercase tracking-widest mt-1 sm:mt-2">
               {eventDetails.categoryName}
             </span>
+            {ticketDetails.seat && (
+              <span aria-label="Seat" className="font-body text-xs sm:text-sm font-bold text-ink-black mt-1">
+                Section {ticketDetails.seat.section} · Row {ticketDetails.seat.row} · Seat {ticketDetails.seat.number}
+              </span>
+            )}
           </div>
         </div>
 

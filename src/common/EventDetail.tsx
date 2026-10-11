@@ -7,6 +7,8 @@ import { useAuth } from '../auth/AuthContext';
 import { WaitingRoomPopUp } from '../popUps/WaitingRoomPopUp';
 import { HoldConfirmationPopUp } from '../popUps/HoldConfirmationPopUp';
 import { SalesUnavailableNotice } from '../components/SalesUnavailableNotice';
+import { SeatSelection, type SelectedSeat } from '../components/SeatSelection';
+import { createSeatHold, seatLabel, type SeatHoldOutcome } from './seatApi';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
@@ -36,6 +38,8 @@ interface ShowDetails {
   status: string;
   createdAt: string;
   ticketCategories: TicketCategory[];
+  // "Seated" shows are sold by choosing exact seats on a seat map; anything else is general admission.
+  seatingMode?: string | null;
 }
 
 interface EventItem {
@@ -87,6 +91,8 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const [holdError, setHoldError] = useState<string | null>(null);
   // Set when the server refuses a hold because sales are paused, before the next page refresh.
   const [salesBlocked, setSalesBlocked] = useState(false);
+  // Seats chosen before the waiting room admitted the customer; held automatically on admission.
+  const [pendingSeats, setPendingSeats] = useState<SelectedSeat[] | null>(null);
   const [activeHold, setActiveHold] = useState<{
     holdId: string;
     categoryName: string;
@@ -149,13 +155,24 @@ export const EventDetail: React.FC<EventDetailProps> = ({
             { id: 'cat-1', name: 'General Admission', price: 85, capacity: 1500 },
           ];
           const selectedCat = categories.find((c) => (c.id || c.name) === holdData.items[0]?.categoryId) || categories[0];
-          setActiveHold({
-            holdId: holdData.holdId,
-            categoryName: selectedCat.name,
-            quantity: holdData.items[0]?.quantity || 1,
-            totalPrice: (selectedCat.price || 0) * (holdData.items[0]?.quantity || 1),
-            expiresAt: holdData.expiresAt,
-          });
+          const heldSeats: { section: string; row: string; number: number }[] = holdData.seats ?? [];
+          if (heldSeats.length > 0) {
+            setActiveHold({
+              holdId: holdData.holdId,
+              categoryName: heldSeats.map(seatLabel).join(', '),
+              quantity: heldSeats.length,
+              totalPrice: (holdData.items as { quantity: number; unitPrice: number }[]).reduce((sum, i) => sum + i.quantity * i.unitPrice, 0),
+              expiresAt: holdData.expiresAt,
+            });
+          } else {
+            setActiveHold({
+              holdId: holdData.holdId,
+              categoryName: selectedCat.name,
+              quantity: holdData.items[0]?.quantity || 1,
+              totalPrice: (selectedCat.price || 0) * (holdData.items[0]?.quantity || 1),
+              expiresAt: holdData.expiresAt,
+            });
+          }
           setIsHoldConfirmationOpen(true);
           return;
         }
@@ -389,6 +406,37 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const isSelectedCategorySoldOut = activeSelectedId !== null && availabilityMap[activeSelectedId]?.available === 0;
   // A customer already holding tickets can still resume their checkout; only new holds are blocked.
   const salesUnavailable = (displayEvent.salesSuspended === true || salesBlocked) && !activeHold;
+  const isSeatedShow = activeShow?.seatingMode === 'Seated';
+  const seatCategories = Object.fromEntries(
+    ticketCategories.map((cat, idx) => [getCategoryId(cat, idx), { name: cat.name, price: cat.price }]),
+  );
+
+  // Holds the chosen seats. The server decides: it refuses the whole selection if any seat was taken.
+  const holdSeats = async (seats: SelectedSeat[], token: string | null = admissionToken): Promise<SeatHoldOutcome> => {
+    setHoldError(null);
+    setIsCreatingHold(true);
+    try {
+      const outcome = await createSeatHold(apiFetch, activeShowId as string, seats.map((s) => s.id), token);
+      if (outcome.kind === 'created') {
+        setActiveHold({
+          holdId: outcome.hold.holdId,
+          categoryName: seats.map(seatLabel).join(', '),
+          quantity: seats.length,
+          totalPrice: seats.reduce((sum, s) => sum + s.price, 0),
+          expiresAt: outcome.hold.expiresAt || new Date(Date.now() + 600000).toISOString(),
+        });
+        setIsHoldConfirmationOpen(true);
+      } else if (outcome.kind === 'admission-required') {
+        setPendingSeats(seats);
+        setIsWaitingRoomOpen(true);
+      } else if (outcome.kind === 'sales-unavailable') {
+        setSalesBlocked(true);
+      }
+      return outcome;
+    } finally {
+      setIsCreatingHold(false);
+    }
+  };
   const isBuyDisabled = allCategoriesSoldOut || isSelectedCategorySoldOut || salesUnavailable;
 
   const eventVenue = displayEvent.venue || activeShow?.venueName || 'Madison Square Garden, NYC';
@@ -592,6 +640,22 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 </p>
               )}
 
+              {isSeatedShow && holdError && (
+                <div role="alert" className="bg-red-50 border-2 border-red-500 rounded-2xl p-3 text-[#FF3B3B] font-body font-medium text-sm">
+                  {holdError}
+                </div>
+              )}
+              {isSeatedShow && activeShowId ? (
+                <SeatSelection
+                  showId={activeShowId}
+                  categories={seatCategories}
+                  isAuthenticated={isAuthenticated}
+                  onLogin={login}
+                  onHold={(seats) => (activeHold ? Promise.resolve<SeatHoldOutcome>({ kind: 'failed', message: 'You already have an active hold for this show.' }) : holdSeats(seats))}
+                  disabled={salesUnavailable || isCreatingHold || Boolean(activeHold)}
+                />
+              ) : (
+              <>
               {/* Ticket Category Tier Options */}
               <div className="flex flex-col gap-3">
                 {ticketCategories.map((cat, idx) => {
@@ -726,6 +790,9 @@ export const EventDetail: React.FC<EventDetailProps> = ({
                 )}
               </button>
 
+              </>
+              )}
+
               {/* Secure Checkout Subtext */}
               <div className="flex items-center justify-center gap-1.5 text-xs text-ink-gray-70 font-body font-medium mt-1">
                 <Lock size={14} className="text-ink-gray-70" />
@@ -747,6 +814,16 @@ export const EventDetail: React.FC<EventDetailProps> = ({
           onAdmitted={async (token) => {
             setAdmissionToken(token);
             setIsWaitingRoomOpen(false);
+
+            if (pendingSeats) {
+              const seats = pendingSeats;
+              setPendingSeats(null);
+              const outcome = await holdSeats(seats, token);
+              if (outcome.kind === 'seats-unavailable' || outcome.kind === 'failed') {
+                setHoldError(outcome.message);
+              }
+              return;
+            }
             
             // Auto-trigger hold attempt using the acquired admission token
             const selectedCat = ticketCategories.find((c, idx) => getCategoryId(c, idx) === activeSelectedId) || ticketCategories[0];
