@@ -130,11 +130,21 @@ function App() {
       );
     }
 
-    if (currentPath.startsWith('/checkout/')) {
-      const orderId = currentPath.replace('/checkout/', '').split('?')[0];
+    if (currentPath.startsWith('/checkout')) {
+      const searchParams = new URLSearchParams(window.location.search);
+      const queryShowId = searchParams.get('showId') || undefined;
+      const orderId = currentPath.startsWith('/checkout/')
+        ? currentPath.replace('/checkout/', '').split('?')[0]
+        : searchParams.get('orderId') || undefined;
+
+      const queryCountStr = searchParams.get('count');
+      const queryCount = queryCountStr ? parseInt(queryCountStr, 10) : undefined;
+
       return (
         <CheckoutPage
           orderId={orderId}
+          showId={queryShowId}
+          targetCount={queryCount && !isNaN(queryCount) ? queryCount : undefined}
           onNavigateHome={() => navigateTo('/')}
         />
       );

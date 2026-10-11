@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { ShowCancellationProgress } from '../components/ShowCancellationProgress';
 import { SeatMapRequestPanel } from '../components/SeatMapRequestPanel';
 import { ShowSalesPanel } from '../components/ShowSalesPanel';
 import {
@@ -86,6 +85,7 @@ export const OrganizerDashboard: React.FC = () => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   // A suspended organizer can still read their events but every write is refused by the backend.
   const [isSuspended, setIsSuspended] = useState(false);
+  const [cancellingShowId, setCancellingShowId] = useState<string | null>(null);
   const suspendedHint = isSuspended ? 'Unavailable while your account is suspended' : undefined;
 
   // Modals
@@ -100,12 +100,14 @@ export const OrganizerDashboard: React.FC = () => {
     title: string;
     description: React.ReactNode;
     confirmText: string;
+    cancelText?: string;
     onConfirm: () => void;
   }>({
     isOpen: false,
     title: '',
     description: '',
     confirmText: 'Delete',
+    cancelText: 'Cancel',
     onConfirm: () => {}
   });
 
@@ -749,12 +751,13 @@ export const OrganizerDashboard: React.FC = () => {
     setConfirmModal({
       isOpen: true,
       title: 'Cancel Show?',
-      description: 'Are you sure you want to cancel this performance show? This will set its status to Cancelled.',
-      confirmText: 'Cancel Show',
+      description: 'Cancel this entire show? A full refund will be requested for all ticket holders. This cannot be undone once confirmed.',
+      confirmText: 'Confirm cancellation',
+      cancelText: 'Keep show',
       onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         try {
           setIsLoading(true);
+          setCancellingShowId(showId);
 
           const res = await apiFetch(
             `${CATALOG_API_URL}/api/catalog/shows/${showId}/cancel`,
@@ -778,6 +781,8 @@ export const OrganizerDashboard: React.FC = () => {
           showNotification('Error cancelling show.', true);
         } finally {
           setIsLoading(false);
+          setCancellingShowId(null);
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         }
       }
     });
@@ -1221,7 +1226,7 @@ title={suspendedHint}
                         </h3>
 
                         <span className="text-xs font-bold bg-ink-gray-30 text-ink-black px-2.5 py-0.5 rounded-full">
-                          {evt.shows?.length || 0}
+                          {evt.shows?.filter((s) => s.status !== 'Cancelled').length || 0}
                         </span>
                       </div>
 
@@ -1245,7 +1250,7 @@ title={suspendedHint}
 
                     {/* Shows List */}
                     {!evt.shows ||
-                    evt.shows.length === 0 ? (
+                    evt.shows.filter((s) => s.status !== 'Cancelled').length === 0 ? (
                       <div className="bg-[#F9F9FC] border-2 border-dashed border-ink-gray-30 rounded-20 p-5 text-center">
                         <p className="text-xs text-ink-gray-70 font-medium">
                           No shows scheduled yet. Add a show
@@ -1256,18 +1261,15 @@ title={suspendedHint}
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                        {evt.shows.map((show) => {
-                          const isShowCancelled =
-                            show.status === 'Cancelled';
+                        {evt.shows
+                          .filter((show) => show.status !== 'Cancelled')
+                          .map((show) => {
+                          const isShowCancelled = false;
 
                           return (
                             <div
                               key={show.id}
-                              className={`bg-[#F9F9FC] border-2 border-ink-black rounded-20 p-5 flex flex-col gap-3.5 ${
-                                isShowCancelled
-                                  ? 'opacity-60 bg-red-50/50'
-                                  : ''
-                              }`}
+                              className="bg-[#F9F9FC] border-2 border-ink-black rounded-20 p-5 flex flex-col gap-3.5"
                             >
 
                               {/* Show Header */}
@@ -1290,18 +1292,11 @@ title={suspendedHint}
                                   </span>
                                 </div>
 
-                                <span
-                                  className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                                    isShowCancelled
-                                      ? 'bg-red-100 text-state-error border-state-error'
-                                      : 'bg-[#00C875]/20 text-[#00875A] border-[#00875A]'
-                                  }`}
-                                >
+                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-[#00C875]/20 text-[#00875A] border-[#00875A]">
                                   {show.status}
                                 </span>
                               </div>
 
-                              {isShowCancelled && <ShowCancellationProgress showId={show.id} />}
                               {/* Show Config Meta */}
                               <div className="grid grid-cols-2 gap-2 text-[12px] text-ink-gray-70">
 
@@ -1412,10 +1407,6 @@ title={suspendedHint}
                               </div>
 
                               {!isShowCancelled && !isCancelled && (
-                                <ShowSalesPanel showId={show.id} categories={show.ticketCategories ?? []} />
-                              )}
-
-                              {!isShowCancelled && !isCancelled && (
                                 <SeatMapRequestPanel showId={show.id} disabled={isSuspended} disabledHint={suspendedHint} />
                               )}
 
@@ -1444,13 +1435,17 @@ title={suspendedHint}
                                           show.id
                                         )
                                       }
-disabled={isSuspended}
-title={suspendedHint}
-                                      className="text-xs font-bold text-state-error hover:text-red-700 flex items-center gap-1 cursor-pointer py-1 px-2"
+                                      disabled={isSuspended || cancellingShowId === show.id}
+                                      title={suspendedHint}
+                                      className="text-xs font-heading font-bold text-state-error hover:text-red-700 bg-rose-50 hover:bg-rose-100 border border-ink-black rounded-full shadow-[2px_2px_0px_0px_#0A0A0F] active:shadow-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 flex items-center gap-1 cursor-pointer py-1 px-2.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                      <Ban size={12} />
+                                      {cancellingShowId === show.id ? (
+                                        <div className="w-3 h-3 border-2 border-state-error border-t-transparent rounded-full animate-spin" />
+                                      ) : (
+                                        <Ban size={12} />
+                                      )}
                                       <span>
-                                        Cancel Show
+                                        {cancellingShowId === show.id ? 'Cancelling...' : 'Cancel Show'}
                                       </span>
                                     </button>
 
@@ -1462,6 +1457,54 @@ title={suspendedHint}
                       </div>
                     )}
                   </div>
+
+                  {/* Show Sales Section */}
+                  {evt.shows && evt.shows.length > 0 && !isCancelled && (
+                    <div className="border-t-2 border-ink-gray-30 pt-5 flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-heading font-bold text-[18px] text-ink-black">
+                            Show Sales
+                          </h3>
+                          <span className="text-xs font-bold bg-brand-blue-light text-brand-blue px-2.5 py-0.5 rounded-full border border-brand-blue/30">
+                            {evt.shows.filter((s) => s.status !== 'Cancelled').length} Active
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {evt.shows.map((show) => {
+                          const isShowCancelled = show.status === 'Cancelled';
+                          if (isShowCancelled) return null;
+
+                          return (
+                            <div
+                              key={`sales-${show.id}`}
+                              className="bg-[#F9F9FC] border-2 border-ink-black rounded-20 p-5 flex flex-col gap-3.5 shadow-sm"
+                            >
+                              <div className="flex items-center justify-between border-b border-ink-gray-30 pb-2.5">
+                                <div className="flex items-center gap-2">
+                                  <Calendar size={15} className="text-brand-blue" />
+                                  <span className="font-bold text-sm text-ink-black">
+                                    {show.showDate} ·{' '}
+                                    {show.showTime ? show.showTime.substring(0, 5) : ''}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-[#00C875]/20 text-[#00875A] border-[#00875A]">
+                                  {show.status}
+                                </span>
+                              </div>
+
+                              <ShowSalesPanel
+                                showId={show.id}
+                                categories={show.ticketCategories ?? []}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1569,6 +1612,7 @@ title={suspendedHint}
         title={confirmModal.title}
         description={confirmModal.description}
         confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
         isLoading={isLoading}
       />
 

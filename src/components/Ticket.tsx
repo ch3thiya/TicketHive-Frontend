@@ -22,8 +22,13 @@ interface TicketProps {
 }
 
 export const Ticket: React.FC<TicketProps> = ({ eventDetails, ticketDetails }) => {
+  const parsedDate = eventDetails.date ? new Date(eventDetails.date) : null;
+  const isValidDate = parsedDate && !isNaN(parsedDate.getTime());
+  const uniqueCode = ticketDetails.uniqueCode || (ticketDetails as any).code || 'TKT';
+  const orderRef = (ticketDetails.orderId || '').slice(0, 8);
+
   return (
-    <div className="w-full h-full flex bg-[#FDFDFF] border-3 border-ink-black rounded-[32px] overflow-hidden shadow-[8px_8px_0px_0px_#0A0A0F] relative isolate">
+    <div className="w-full flex flex-col md:flex-row bg-[#FDFDFF] border-3 border-ink-black rounded-[32px] overflow-hidden shadow-[8px_8px_0px_0px_#0A0A0F] relative isolate">
       {/* Background Poster Blur Overlay */}
       {eventDetails.posterUrl && (
         <div className="absolute inset-0 z-[-1] opacity-5">
@@ -60,8 +65,14 @@ export const Ticket: React.FC<TicketProps> = ({ eventDetails, ticketDetails }) =
           <div className="flex flex-col">
             <span className="font-body text-[10px] font-bold text-ink-gray-70 uppercase tracking-widest mb-1">Date & Time</span>
             <span className="font-heading font-bold text-lg text-ink-black">
-              {new Date(eventDetails.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}<br />
-              {eventDetails.time}
+              {isValidDate ? (
+                <>
+                  {parsedDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                  {eventDetails.time && <><br />{eventDetails.time}</>}
+                </>
+              ) : (
+                eventDetails.time || 'Date TBA'
+              )}
             </span>
           </div>
           <div className="flex flex-col">
@@ -73,29 +84,33 @@ export const Ticket: React.FC<TicketProps> = ({ eventDetails, ticketDetails }) =
           <div className="flex flex-col mt-4">
             <span className="font-body text-[10px] font-bold text-ink-gray-70 uppercase tracking-widest mb-1">Ticket ID</span>
             <span className="font-mono font-bold text-base text-ink-black">
-              {ticketDetails.uniqueCode}
+              {uniqueCode}
             </span>
           </div>
           <div className="flex flex-col mt-4">
             <span className="font-body text-[10px] font-bold text-ink-gray-70 uppercase tracking-widest mb-1">Order Ref</span>
             <span className="font-mono font-bold text-base text-ink-black">
-              {ticketDetails.orderId.slice(0, 8)}
+              {orderRef || '—'}
             </span>
           </div>
         </div>
       </div>
 
       {/* Dashed Separator */}
-      <div className="w-1 border-l-4 border-dashed border-ink-gray-30 relative my-6">
+      <div className="hidden md:block w-1 border-l-4 border-dashed border-ink-gray-30 relative my-6">
         <div className="absolute -top-10 -left-4 w-8 h-8 bg-brand-white border-b-3 border-r-3 border-l-3 border-ink-black rounded-b-full"></div>
         <div className="absolute -bottom-10 -left-4 w-8 h-8 bg-brand-white border-t-3 border-r-3 border-l-3 border-ink-black rounded-t-full"></div>
       </div>
+      <div className="md:hidden h-1 border-t-4 border-dashed border-ink-gray-30 relative mx-6"></div>
 
       {/* Ticket Stub / QR Code (Right 1/3) */}
-      <div className="w-[180px] sm:w-[220px] bg-brand-blue-light/30 flex flex-col items-center justify-center p-6 shrink-0 relative">
-
+      <div className="w-full md:w-[220px] bg-brand-blue-light/30 flex flex-col items-center justify-center p-6 shrink-0 relative">
         <div className="bg-white p-3 rounded-16 border-3 border-ink-black shadow-brutal-s flex items-center justify-center">
-          {ticketDetails.voidedAt ? <strong className="text-rose-700">CANCELLED</strong> : <QRCodeSVG value={`${window.location.origin}/?validate=${ticketDetails.uniqueCode}`} size={120} level="H" />}
+          {ticketDetails.voidedAt ? (
+            <strong className="text-rose-700">CANCELLED</strong>
+          ) : (
+            <QRCodeSVG value={`${window.location.origin}/?validate=${uniqueCode}`} size={120} level="H" />
+          )}
         </div>
       </div>
     </div>
