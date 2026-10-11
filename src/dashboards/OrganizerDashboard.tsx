@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { ShowCancellationProgress } from '../components/ShowCancellationProgress';
+import { SeatMapRequestPanel } from '../components/SeatMapRequestPanel';
 import {
   ArrowLeft,
   Calendar,
@@ -1408,6 +1409,10 @@ title={suspendedHint}
                                   )}
                                 </div>
                               </div>
+
+                              {!isShowCancelled && !isCancelled && (
+                                <SeatMapRequestPanel showId={show.id} disabled={isSuspended} disabledHint={suspendedHint} />
+                              )}
 
                               {/* Show Actions */}
                               {!isShowCancelled &&

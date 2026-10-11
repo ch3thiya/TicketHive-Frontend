@@ -41,4 +41,18 @@ describe('toApiError', () => {
 
     expect(error.message).toBe('Identity is down.');
   });
+
+  it('carries the individual validation reasons of a 422 response', async () => {
+    const error = await toApiError(
+      response(422, { detail: 'The layout is not valid.', errors: [{ code: 'UnassignedSection', message: 'Section Front has no category.' }] }),
+      'fallback',
+    );
+
+    expect(error.status).toBe(422);
+    expect(error.details).toEqual([{ code: 'UnassignedSection', message: 'Section Front has no category.' }]);
+  });
+
+  it('has no details when the body lists none', async () => {
+    expect((await toApiError(response(409, { detail: 'x' }), 'fallback')).details).toEqual([]);
+  });
 });

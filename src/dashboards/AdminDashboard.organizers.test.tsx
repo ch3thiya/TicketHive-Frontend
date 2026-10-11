@@ -37,6 +37,7 @@ function stub({ organizers = [ACTIVE, SUSPENDED], organizersStatus = 200, suspen
     if (url.endsWith('/organizer-requests/pending')) return Promise.resolve(json([]));
     if (url.endsWith('/organizer-requests/organizers')) return Promise.resolve(organizersStatus === 200 ? json(current) : json({ detail: 'Identity unavailable.' }, organizersStatus));
     if (url.includes('/api/catalog/venues')) return Promise.resolve(json([]));
+    if (url.includes('/api/catalog/admin/seat-map-requests')) return Promise.resolve(json([]));
     if (url.endsWith('/org-active/suspend') && options?.method === 'POST') {
       const response = suspend ? suspend() : json({ organizerId: 'org-active', status: 'suspended', repeated: false });
       if (response.ok) current = [{ ...ACTIVE, status: 'suspended', suspensionReason: 'Fraud', suspendedAt: '2026-10-10T00:00:00Z' }, SUSPENDED];
