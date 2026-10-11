@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { ShowCancellationProgress } from '../components/ShowCancellationProgress';
 import { SeatMapRequestPanel } from '../components/SeatMapRequestPanel';
+import { ShowSalesPanel } from '../components/ShowSalesPanel';
 import {
   ArrowLeft,
   Calendar,
@@ -1409,6 +1410,10 @@ title={suspendedHint}
                                   )}
                                 </div>
                               </div>
+
+                              {!isShowCancelled && !isCancelled && (
+                                <ShowSalesPanel showId={show.id} categories={show.ticketCategories ?? []} />
+                              )}
 
                               {!isShowCancelled && !isCancelled && (
                                 <SeatMapRequestPanel showId={show.id} disabled={isSuspended} disabledHint={suspendedHint} />
