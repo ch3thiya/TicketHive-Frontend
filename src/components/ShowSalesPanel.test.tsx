@@ -29,7 +29,10 @@ const sales = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
-beforeEach(() => apiFetch.mockReset());
+// Braces matter: a beforeEach that returns the mock makes the runner call it again as cleanup.
+beforeEach(() => {
+  apiFetch.mockReset();
+});
 
 async function open(user: ReturnType<typeof userEvent.setup>) {
   render(<ShowSalesPanel showId="show-1" categories={CATEGORIES} />);
@@ -147,5 +150,28 @@ describe('ShowSalesPanel', () => {
     await open(user);
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/sales could not be loaded/i);
+  });
+
+  it('shows a plain message and offers to try again when the network request fails', async () => {
+    apiFetch.mockRejectedValue(new TypeError('Failed to fetch'));
+    const user = userEvent.setup();
+    await open(user);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Sales could not be loaded. Please try again.');
+    expect(alert).not.toHaveTextContent(/failed to fetch/i);
+    expect(within(alert).getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.queryByText('Tickets sold')).not.toBeInTheDocument();
+  });
+
+  it('recovers once the network is back', async () => {
+    apiFetch.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockImplementation(async () => json(sales()));
+    const user = userEvent.setup();
+    await open(user);
+
+    await user.click(await screen.findByRole('button', { name: 'Try again' }));
+
+    expect(await screen.findByText('Tickets sold')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
