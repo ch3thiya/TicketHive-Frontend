@@ -364,7 +364,7 @@ export const MyTicketsPage: React.FC<MyTicketsPageProps> = ({ onNavigateHome }) 
             {(() => {
               const matchedEvent = events.find((e) => e.shows?.some((s: any) => s.id === selectedTicket.showId));
               const matchedShow = matchedEvent?.shows?.find((s: any) => s.id === selectedTicket.showId);
-              const category = matchedEvent?.ticketCategories?.find((c: any) => c.id === selectedTicket.categoryId || c.categoryId === selectedTicket.categoryId);
+              const category = (matchedShow?.ticketCategories ?? matchedEvent?.ticketCategories)?.find((c: any) => c.id === selectedTicket.categoryId || c.categoryId === selectedTicket.categoryId);
               
               if (!matchedEvent || !matchedShow) return null;
               

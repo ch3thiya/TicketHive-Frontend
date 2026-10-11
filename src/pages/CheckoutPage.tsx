@@ -59,6 +59,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
   const [eventDetails, setEventDetails] = useState<any | null>(null);
   const [ticketDetails, setTicketDetails] = useState<any | null>(null);
+  // Every ticket of the order: a seated order has one ticket (and seat) per seat chosen.
+  const [orderTickets, setOrderTickets] = useState<any[]>([]);
 
   const isEmail = (val: unknown): val is string =>
     typeof val === 'string' && val.includes('@') && val.includes('.');
@@ -348,6 +350,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
                   date: matchedShow?.showDate,
                   time: matchedShow?.showTime,
                   categoryName: matchedCategory?.name || 'General Admission',
+                  categories: matchedShow?.ticketCategories ?? [],
                 });
               }
             }
@@ -411,9 +414,10 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
           const res = await apiFetch(`${BOOKING_API_URL}/api/booking/tickets`);
           if (res.ok) {
             const data = await res.json();
-            const matchedTicket = data.find((t: any) => t.orderId === orderId);
-            if (matchedTicket) {
-              setTicketDetails(matchedTicket);
+            const mine = data.filter((t: any) => t.orderId === orderId);
+            if (mine.length > 0) {
+              setTicketDetails(mine[0]);
+              setOrderTickets(mine);
             }
           }
         } catch { /* The order remains visible if ticket retrieval temporarily fails. */ }
@@ -496,14 +500,25 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
           {/* Left Column: Ticket (2/3 width on large screens) */}
           <div className="w-full lg:w-2/3 flex flex-col justify-center">
             {ticketDetails && eventDetails && (
-              <Ticket
-                eventDetails={eventDetails}
-                ticketDetails={{
-                  ...ticketDetails,
-                  customerName: `${customerDetails.firstName} ${customerDetails.lastName}`,
-                  price: orderStatus.totalAmount
-                }}
-              />
+              <div className="flex flex-col gap-8">
+                {(orderTickets.length > 0 ? orderTickets : [ticketDetails]).map((ticket: any, index: number, all: any[]) => (
+                  <Ticket
+                    key={ticket.id ?? index}
+                    eventDetails={{
+                      ...eventDetails,
+                      categoryName:
+                        eventDetails.categories?.find((c: any) => c.id === ticket.categoryId || c.categoryId === ticket.categoryId)?.name ??
+                        eventDetails.categoryName,
+                    }}
+                    ticketDetails={{
+                      ...ticket,
+                      customerName: `${customerDetails.firstName} ${customerDetails.lastName}`,
+                      // A single ticket shows what was paid for the order; several show their own price.
+                      price: all.length === 1 ? orderStatus.totalAmount : ticket.price
+                    }}
+                  />
+                ))}
+              </div>
             )}
             {!ticketDetails && (
               <div className="w-full bg-[#F9F9FF] border-2 border-ink-black rounded-24 p-4 text-left">
