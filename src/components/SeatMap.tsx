@@ -48,8 +48,8 @@ export const SeatMap: React.FC<SeatMapProps> = ({ map, unavailable, selected, ca
     map.categories.find((c) => c.categoryId === categoryId)?.unitPrice ?? categories[categoryId]?.price ?? 0;
 
   return (
-    <div className="flex flex-col gap-4">
-      <ul aria-label="Seat key" className="flex flex-wrap gap-x-4 gap-y-1 font-body text-[12px] text-ink-black">
+    <div className="flex flex-col gap-4 w-full">
+      <ul aria-label="Seat key" className="flex flex-wrap justify-center gap-x-4 gap-y-1 font-body text-[12px] text-ink-black">
         {(['Available', 'Selected', 'Held', 'Sold'] as const).map((key) => (
           <li key={key} className="flex items-center gap-1.5">
             <span
@@ -63,7 +63,7 @@ export const SeatMap: React.FC<SeatMapProps> = ({ map, unavailable, selected, ca
         ))}
       </ul>
 
-      <ul aria-label="Prices" className="flex flex-wrap gap-x-4 gap-y-1 font-body text-[12px] text-ink-black">
+      <ul aria-label="Prices" className="flex flex-wrap justify-center gap-x-4 gap-y-1 font-body text-[12px] text-ink-black">
         {map.categories.map((c) => (
           <li key={c.categoryId}>
             <span className="font-bold">{categories[c.categoryId]?.name ?? 'Tickets'}</span> {money(c.unitPrice)}
@@ -71,8 +71,8 @@ export const SeatMap: React.FC<SeatMapProps> = ({ map, unavailable, selected, ca
         ))}
       </ul>
 
-      <div className="overflow-x-auto" role="group" aria-label="Seat map">
-        <div className="flex flex-col gap-5 min-w-max pb-1">
+      <div className="overflow-x-auto w-full flex justify-center py-2" role="group" aria-label="Seat map">
+        <div className="flex flex-col items-center gap-5 min-w-max pb-1">
           {map.sections.map((section) => (
             <section key={section.name} aria-label={`Section ${section.name}`} className="flex flex-col gap-1.5">
               <h4 className="font-heading font-bold text-[13px] text-ink-black">{section.name}</h4>

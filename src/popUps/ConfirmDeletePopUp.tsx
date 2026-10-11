@@ -28,7 +28,7 @@ export const ConfirmDeletePopUp: React.FC<ConfirmDeletePopUpProps> = ({
       <div className="bg-brand-white border-3 border-ink-black rounded-32 shadow-soft-3d w-full max-w-[480px] p-8 flex flex-col items-center relative animate-in zoom-in-95 duration-200">
         
         {/* Warning Emoji Badge */}
-        <div className="w-16 h-16 rounded-full border-3 border-ink-black flex items-center justify-center bg-[#FF3B3B]/10 shadow-[3px_3px_0px_0px_#0A0A0F] text-2xl select-none mb-5 animate-bounce">
+        <div className="w-16 h-16 rounded-full border-3 border-ink-black flex items-center justify-center bg-[#FF3B3B]/10 shadow-[3px_3px_0px_0px_#0A0A0F] text-2xl select-none mb-5">
           ⚠️
         </div>
 
@@ -48,7 +48,7 @@ export const ConfirmDeletePopUp: React.FC<ConfirmDeletePopUpProps> = ({
             type="button"
             onClick={onClose}
             disabled={isLoading}
-            className="flex-1 font-body font-bold text-[14px] text-ink-black bg-brand-white border-2.5 border-ink-black rounded-full py-3 hover:bg-brand-blue-light transition-all cursor-pointer active:translate-y-px select-none text-center outline-none disabled:opacity-50"
+            className="flex-1 font-body font-bold text-[14px] text-ink-black bg-brand-white border-2 border-ink-black rounded-full py-3 hover:bg-brand-blue-light transition-all cursor-pointer active:translate-y-px select-none text-center outline-none shadow-[2px_2px_0px_0px_#0A0A0F] hover:-translate-x-0.5 hover:-translate-y-0.5 disabled:opacity-50"
           >
             {cancelText}
           </button>
@@ -56,7 +56,7 @@ export const ConfirmDeletePopUp: React.FC<ConfirmDeletePopUpProps> = ({
             type="button"
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex-1 font-body font-bold text-[14px] text-brand-white bg-[#FF3B3B] border-2.5 border-ink-black rounded-full py-3 hover:bg-[#E02424] transition-all cursor-pointer active:translate-y-[2px] shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F] outline-none disabled:opacity-50"
+            className="flex-1 font-body font-bold text-[14px] text-brand-white bg-[#FF3B3B] border-2 border-ink-black rounded-full py-3 hover:bg-[#E02424] transition-all cursor-pointer active:translate-y-[2px] shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F] outline-none disabled:opacity-50"
           >
             {isLoading ? 'Processing...' : confirmText}
           </button>
