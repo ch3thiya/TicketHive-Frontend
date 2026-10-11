@@ -5,6 +5,7 @@ import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
 import { VenueFormPopUp } from '../popUps/VenueFormPopUp';
 import { SuspendOrganizerPopUp } from '../popUps/SuspendOrganizerPopUp';
 import { OrganizerStatusBadge } from '../components/OrganizerStatusBadge';
+import { SeatMapAdminPanel } from '../components/SeatMapAdminPanel';
 import { fetchOrganizers, suspendOrganizer, reinstateOrganizer, type AdminOrganizer } from '../common/organizerAdminApi';
 import { fetchVenues, createVenue, updateVenue, deleteVenue, type Venue, type VenueInput } from '../common/venueApi';
 
@@ -559,6 +560,14 @@ export const AdminDashboard: React.FC = () => {
               ))}
             </div>
           )}
+        </div>
+
+        {/* 5. Seat Map Requests Card Box */}
+        <div className="bg-brand-white border-3 border-ink-black rounded-28 p-8 shadow-soft-3d">
+          <h2 className="font-heading font-bold text-[20px] text-ink-black mb-6">
+            Seat Map Requests
+          </h2>
+          <SeatMapAdminPanel />
         </div>
 
       </main>
