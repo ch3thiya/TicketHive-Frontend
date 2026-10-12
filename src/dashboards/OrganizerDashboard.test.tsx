@@ -94,12 +94,12 @@ function lastUpdateBody(): { categories: Array<Record<string, unknown>> } {
   return JSON.parse(call[1].body as string);
 }
 
-async function openEditShowForm() {
+async function openEditShowForm(user: ReturnType<typeof userEvent.setup>) {
   render(<OrganizerDashboard />);
 
   const editButtons = await screen.findAllByRole('button', { name: 'Edit' });
   // The event card renders "Edit" (for the event) before "Edit" (for the show).
-  await userEvent.click(editButtons[editButtons.length - 1]);
+  await user.click(editButtons[editButtons.length - 1]);
 
   return screen.getByRole('button', { name: /save show changes/i }).closest('form') as HTMLElement;
 }
@@ -110,20 +110,21 @@ afterEach(() => {
 
 describe('OrganizerDashboard editing an existing show', () => {
   it('sends existing category ids unchanged and omits id for a newly added category', async () => {
+    const user = userEvent.setup();
     stubApiFetch();
-    const form = await openEditShowForm();
+    const form = await openEditShowForm(user);
 
-    await userEvent.click(within(form).getByRole('button', { name: /add tier/i }));
+    await user.click(within(form).getByRole('button', { name: /add tier/i }));
 
     const nameInputs = within(form).getAllByPlaceholderText('General Admission, VIP, Balcony');
     const priceInputs = within(form).getAllByPlaceholderText('50');
     const capacityInputs = within(form).getAllByPlaceholderText('100');
 
-    await userEvent.type(nameInputs[nameInputs.length - 1], 'Balcony');
-    await userEvent.type(priceInputs[priceInputs.length - 1], '30');
-    await userEvent.type(capacityInputs[capacityInputs.length - 1], '75');
+    await user.type(nameInputs[nameInputs.length - 1], 'Balcony');
+    await user.type(priceInputs[priceInputs.length - 1], '30');
+    await user.type(capacityInputs[capacityInputs.length - 1], '75');
 
-    await userEvent.click(screen.getByRole('button', { name: /save show changes/i }));
+    await user.click(screen.getByRole('button', { name: /save show changes/i }));
 
     const body = await vi.waitFor(() => lastUpdateBody());
 
@@ -136,14 +137,15 @@ describe('OrganizerDashboard editing an existing show', () => {
   });
 
   it('omits a removed category from the payload while keeping the remaining one\'s id', async () => {
+    const user = userEvent.setup();
     stubApiFetch();
-    const form = await openEditShowForm();
+    const form = await openEditShowForm(user);
 
     // Remove the VIP row (second category), leaving General Admission.
     const removeButtons = within(form).getAllByRole('button', { name: '✕' });
-    await userEvent.click(removeButtons[removeButtons.length - 1]);
+    await user.click(removeButtons[removeButtons.length - 1]);
 
-    await userEvent.click(screen.getByRole('button', { name: /save show changes/i }));
+    await user.click(screen.getByRole('button', { name: /save show changes/i }));
 
     const body = await vi.waitFor(() => lastUpdateBody());
 
@@ -153,14 +155,15 @@ describe('OrganizerDashboard editing an existing show', () => {
   });
 
   it('keeps the category id when only its price or capacity is edited', async () => {
+    const user = userEvent.setup();
     stubApiFetch();
-    const form = await openEditShowForm();
+    const form = await openEditShowForm(user);
 
     const capacityInputs = within(form).getAllByDisplayValue('200');
-    await userEvent.clear(capacityInputs[0]);
-    await userEvent.type(capacityInputs[0], '250');
+    await user.clear(capacityInputs[0]);
+    await user.type(capacityInputs[0], '250');
 
-    await userEvent.click(screen.getByRole('button', { name: /save show changes/i }));
+    await user.click(screen.getByRole('button', { name: /save show changes/i }));
 
     const body = await vi.waitFor(() => lastUpdateBody());
 

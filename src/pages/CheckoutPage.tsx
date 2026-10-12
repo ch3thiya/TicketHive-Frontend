@@ -3,13 +3,39 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { CheckCircle2, AlertCircle, CreditCard, Lock, ArrowLeft } from 'lucide-react';
 import { Ticket } from '../components/Ticket';
+import { OrderCancellation } from '../components/OrderCancellation';
+import { SeatSelection, type SelectedSeat } from '../components/SeatSelection';
+import { WaitingRoomPopUp } from '../popUps/WaitingRoomPopUp';
+import { createSeatHold, type SeatHoldOutcome } from '../common/seatApi';
+import type { SeatCategoryInfo } from '../components/SeatMap';
 
 const BOOKING_API_URL = import.meta.env.VITE_BOOKING_API_URL || '';
 const PAYMENT_API_URL = import.meta.env.VITE_PAYMENT_API_URL || BOOKING_API_URL;
+const CATALOG_API_URL = import.meta.env.VITE_CATALOG_API_URL || '';
 
 interface CheckoutPageProps {
-  orderId: string;
+  orderId?: string;
+  showId?: string;
+  targetCount?: number;
   onNavigateHome: () => void;
+}
+
+// The part of a ticket the confirmation page reads; the rest is passed through to the ticket.
+interface OrderTicket {
+  id?: string;
+  orderId: string;
+  uniqueCode: string;
+  voidedAt?: string | null;
+  categoryId?: string;
+  price: number;
+  seat?: { section: string; row: string; number: number } | null;
+  [key: string]: unknown;
+}
+
+interface ShowCategory {
+  id?: string;
+  categoryId?: string;
+  name: string;
 }
 
 interface OrderStatusResponse {
@@ -46,8 +72,17 @@ declare global {
   }
 }
 
-export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateHome }) => {
-  const { apiFetch, email: authEmail, fullName: authFullName, profile } = useAuth();
+export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId: initialOrderId, showId, targetCount, onNavigateHome }) => {
+  const { apiFetch, email: authEmail, fullName: authFullName, profile, isAuthenticated, login } = useAuth();
+  const [activeOrderId, setActiveOrderId] = useState<string | undefined>(initialOrderId);
+  const [showEventData, setShowEventData] = useState<any | null>(null);
+  const [seatCategories, setSeatCategories] = useState<Record<string, SeatCategoryInfo>>({});
+  const [seatStepError, setSeatStepError] = useState<string | null>(null);
+  const [isHoldingSeats, setIsHoldingSeats] = useState(false);
+  const [isWaitingRoomOpen, setIsWaitingRoomOpen] = useState(false);
+  const [pendingSeats, setPendingSeats] = useState<SelectedSeat[] | null>(null);
+  const [admissionToken, setAdmissionToken] = useState<string | null>(null);
+
   const [orderStatus, setOrderStatus] = useState<OrderStatusResponse | null>(null);
   const [payHereParams, setPayHereParams] = useState<PayHereCheckoutParams | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -58,6 +93,58 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   const [redirectCountdown, setRedirectCountdown] = useState<number>(5);
   const [eventDetails, setEventDetails] = useState<any | null>(null);
   const [ticketDetails, setTicketDetails] = useState<any | null>(null);
+  // Every ticket of the order: a seated order has one ticket (and seat) per seat chosen.
+  const [orderTickets, setOrderTickets] = useState<OrderTicket[]>([]);
+
+  // When initialOrderId changes from router, keep activeOrderId in sync
+  useEffect(() => {
+    if (initialOrderId) {
+      setActiveOrderId(initialOrderId);
+    }
+  }, [initialOrderId]);
+
+  // Load show details and categories if showId is provided
+  useEffect(() => {
+    if (!showId) return;
+
+    const loadShowInfo = async () => {
+      try {
+        const eventsRes = await fetch(`${CATALOG_API_URL}/api/catalog/events`);
+        if (eventsRes.ok) {
+          const eventsData = await eventsRes.json();
+          const targetId = showId.toLowerCase();
+          const matchedEvent = eventsData.find((e: any) => e.shows?.some((s: any) => s.id?.toLowerCase() === targetId));
+          if (matchedEvent) {
+            const matchedShow = matchedEvent.shows.find((s: any) => s.id?.toLowerCase() === targetId);
+            setShowEventData({ event: matchedEvent, show: matchedShow });
+
+            const cats: Record<string, SeatCategoryInfo> = {};
+            const categoriesList = matchedShow?.ticketCategories ?? matchedEvent?.ticketCategories ?? [];
+            categoriesList.forEach((c: any, idx: number) => {
+              const id = c.id || c.categoryId || `cat-${idx}`;
+              cats[id] = { name: c.name, price: Number(c.price) };
+            });
+            setSeatCategories(cats);
+
+            // Seed eventDetails early if not yet set
+            setEventDetails((prev: any) => prev || {
+              bannerUrl: matchedEvent.coverImageUrl || matchedEvent.coverUrl || matchedEvent.bannerUrl || matchedEvent.imageUrl,
+              posterUrl: matchedEvent.imageUrl || matchedEvent.bannerUrl || matchedEvent.coverImageUrl || matchedEvent.coverUrl,
+              name: matchedEvent.name,
+              date: matchedShow?.showDate,
+              time: matchedShow?.showTime,
+              categoryName: categoriesList[0]?.name || 'General Admission',
+              categories: categoriesList,
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load show details for seat selection:', err);
+      }
+    };
+
+    loadShowInfo();
+  }, [showId]);
 
   const isEmail = (val: unknown): val is string =>
     typeof val === 'string' && val.includes('@') && val.includes('.');
@@ -128,9 +215,52 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     }
   }, [authEmail, authFullName, profile]);
 
-  const fetchOrderStatus = async () => {
+  const handleSeatHoldAndProceed = async (seats: SelectedSeat[], token: string | null = admissionToken): Promise<SeatHoldOutcome> => {
+    setSeatStepError(null);
+    setIsHoldingSeats(true);
     try {
-      const res = await fetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/status`);
+      const outcome = await createSeatHold(apiFetch, showId as string, seats.map((s) => s.id), token);
+      if (outcome.kind === 'created') {
+        // Hold acquired: immediately create booking order
+        const res = await apiFetch(`${GATEWAY_URL}/api/booking/orders`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': `order-idemp-${outcome.hold.holdId}`,
+          },
+          body: JSON.stringify({ holdId: outcome.hold.holdId }),
+        });
+
+        if (res.ok || res.status === 201 || res.status === 200) {
+          const orderData = await res.json();
+          const newOrderId = orderData.orderId || orderData.id;
+          setActiveOrderId(newOrderId);
+          window.history.pushState({}, '', `/checkout/${newOrderId}`);
+        } else {
+          const err = await res.json().catch(() => null);
+          setSeatStepError(err?.detail || err?.title || 'Unable to initialize order checkout.');
+          return { kind: 'failed', message: err?.detail || 'Unable to initialize order checkout.' };
+        }
+      } else if (outcome.kind === 'admission-required') {
+        setPendingSeats(seats);
+        setIsWaitingRoomOpen(true);
+      } else if (outcome.kind === 'seats-unavailable' || outcome.kind === 'failed') {
+        setSeatStepError(outcome.message);
+      }
+      return outcome;
+    } catch {
+      const msg = 'Network error while holding seats and initializing checkout.';
+      setSeatStepError(msg);
+      return { kind: 'failed', message: msg };
+    } finally {
+      setIsHoldingSeats(false);
+    }
+  };
+
+  const fetchOrderStatus = async () => {
+    if (!activeOrderId) return;
+    try {
+      const res = await fetch(`${BOOKING_API_URL}/api/booking/orders/${activeOrderId}/status`);
       if (res.ok) {
         const data: OrderStatusResponse = await res.json();
         setOrderStatus(data);
@@ -141,16 +271,17 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   };
 
   const confirmAndRefreshPayment = async () => {
+    if (!activeOrderId) return;
     const customerEmail = customerDetails.email.trim();
     const customerName = `${customerDetails.firstName} ${customerDetails.lastName}`.trim();
 
-    console.log('[Checkout Debug] Initiating sandbox payment confirmation for Order ID:', orderId);
+    console.log('[Checkout Debug] Initiating sandbox payment confirmation for Order ID:', activeOrderId);
     console.log('[Checkout Debug] Dispatching Customer Email:', customerEmail);
     console.log('[Checkout Debug] Dispatching Customer Name:', customerName);
 
     try {
       console.log('[Checkout Debug] Calling Booking Service endpoint /api/booking/orders/confirm-sandbox...');
-      const bookRes = await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/confirm-sandbox`, {
+      const bookRes = await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${activeOrderId}/confirm-sandbox`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerEmail, customerName })
@@ -162,7 +293,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
 
     try {
       console.log('[Checkout Debug] Calling Payment Service endpoint /api/payment/confirm-sandbox...');
-      const payRes = await apiFetch(`${PAYMENT_API_URL}/api/payment/confirm-sandbox/${orderId}`, {
+      const payRes = await apiFetch(`${PAYMENT_API_URL}/api/payment/confirm-sandbox/${activeOrderId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerEmail, customerName })
@@ -173,7 +304,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     }
 
     for (let i = 0; i < 5; i++) {
-      const res = await fetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/status`);
+      const res = await fetch(`${BOOKING_API_URL}/api/booking/orders/${activeOrderId}/status`);
       if (res.ok) {
         const data: OrderStatusResponse = await res.json();
         setOrderStatus(data);
@@ -187,6 +318,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   };
 
   const handlePayHereCheckout = async () => {
+    if (!activeOrderId) return;
     setIsProcessingPayment(true);
     setValidationError(null);
     const errors: { firstName?: string; lastName?: string; email?: string } = {};
@@ -215,7 +347,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     const customerName = `${customerDetails.firstName} ${customerDetails.lastName}`.trim();
 
     try {
-      const contactRes = await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/contact`, {
+      const contactRes = await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${activeOrderId}/contact`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerEmail, customerName }),
@@ -262,6 +394,12 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
         setIsProcessingPayment(false);
       };
 
+      if (!payHereParams.merchantId) {
+        setValidationError('PayHere Merchant ID is missing from checkout parameters.');
+        setIsProcessingPayment(false);
+        return;
+      }
+
       const payment = {
         sandbox: true,
         merchant_id: payHereParams.merchantId,
@@ -292,12 +430,17 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
   };
 
   useEffect(() => {
+    if (!activeOrderId) {
+      setIsLoading(false);
+      return;
+    }
+
     const fetchCheckoutDetails = async () => {
       setIsLoading(true);
       setError(null);
 
       try {
-        const statusRes = await fetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}/status`);
+        const statusRes = await fetch(`${BOOKING_API_URL}/api/booking/orders/${activeOrderId}/status`);
         if (!statusRes.ok) {
           setError('Order not found or has expired.');
           setIsLoading(false);
@@ -306,40 +449,59 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
         const statusData: OrderStatusResponse = await statusRes.json();
         setOrderStatus(statusData);
 
-        let checkoutRes = await apiFetch(`${PAYMENT_API_URL}/api/payment/checkout`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: statusData.orderId,
-            amount: statusData.totalAmount,
-            currency: statusData.currency,
-            itemsSummary: `TicketHive Order ${statusData.orderId.slice(0, 8)}`,
-          }),
-        });
+        if (statusData.status !== 'Confirmed') {
+          let checkoutRes = await apiFetch(`${PAYMENT_API_URL}/api/payment/checkout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId: statusData.orderId,
+              amount: statusData.totalAmount,
+              currency: statusData.currency,
+              itemsSummary: `TicketHive Order ${statusData.orderId.slice(0, 8)}`,
+            }),
+          });
 
-        if (!checkoutRes.ok) {
-          checkoutRes = await apiFetch(`${GATEWAY_URL}/api/booking/orders/${orderId}/checkout`);
-        }
+          if (!checkoutRes.ok) {
+            checkoutRes = await apiFetch(`${GATEWAY_URL}/api/booking/orders/${activeOrderId}/checkout`);
+          }
 
-        if (checkoutRes.ok) {
-          const checkoutData: PayHereCheckoutParams = await checkoutRes.json();
-          setPayHereParams(checkoutData);
-        } else {
-          setError('Unable to load payment parameters.');
+          if (checkoutRes.ok) {
+            const checkoutData: any = await checkoutRes.json();
+            console.log('[Checkout Debug] Received checkout params:', checkoutData);
+            setPayHereParams({
+              merchantId: checkoutData.merchantId || checkoutData.merchant_id,
+              orderId: checkoutData.orderId || checkoutData.order_id,
+              items: checkoutData.items,
+              amount: checkoutData.amount,
+              currency: checkoutData.currency,
+              hash: checkoutData.hash,
+              returnUrl: checkoutData.returnUrl || checkoutData.return_url,
+              cancelUrl: checkoutData.cancelUrl || checkoutData.cancel_url,
+              notifyUrl: checkoutData.notifyUrl || checkoutData.notify_url,
+            });
+          } else {
+            setError('Unable to load payment parameters.');
+          }
         }
 
         try {
-          const orderRes = await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${orderId}`);
+          const orderRes = await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${activeOrderId}`);
           if (orderRes.ok) {
             const orderData = await orderRes.json();
-            const eventsRes = await fetch(`${BOOKING_API_URL}/api/catalog/events`);
+            const eventsRes = await fetch(`${CATALOG_API_URL}/api/catalog/events`);
             if (eventsRes.ok) {
               const eventsData = await eventsRes.json();
-              const matchedEvent = eventsData.find((e: any) => e.shows?.some((s: any) => s.id === orderData.showId));
+              const targetShowId = orderData.showId?.toLowerCase();
+              const matchedEvent = eventsData.find((e: any) =>
+                e.shows?.some((s: any) => s.id?.toLowerCase() === targetShowId)
+              );
               if (matchedEvent) {
-                const matchedShow = matchedEvent.shows.find((s: any) => s.id === orderData.showId);
+                const matchedShow = matchedEvent.shows.find((s: any) => s.id?.toLowerCase() === targetShowId);
                 const categoryId = orderData.items?.[0]?.categoryId;
-                const matchedCategory = matchedEvent.ticketCategories?.find((c: any) => c.id === categoryId || c.categoryId === categoryId);
+                const cats = matchedShow?.ticketCategories ?? matchedEvent?.ticketCategories ?? [];
+                const matchedCategory = cats.find(
+                  (c: any) => (c.id || c.categoryId)?.toLowerCase() === categoryId?.toLowerCase()
+                );
                 setEventDetails({
                   bannerUrl: matchedEvent.coverImageUrl || matchedEvent.coverUrl || matchedEvent.bannerUrl || matchedEvent.imageUrl,
                   posterUrl: matchedEvent.imageUrl || matchedEvent.bannerUrl || matchedEvent.coverImageUrl || matchedEvent.coverUrl,
@@ -347,6 +509,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
                   date: matchedShow?.showDate,
                   time: matchedShow?.showTime,
                   categoryName: matchedCategory?.name || 'General Admission',
+                  categories: cats,
                 });
               }
             }
@@ -362,10 +525,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
       }
     };
 
-    if (orderId) {
-      fetchCheckoutDetails();
-    }
-  }, [orderId, apiFetch]);
+    fetchCheckoutDetails();
+  }, [activeOrderId, apiFetch]);
 
   // Hold Timer calculation (10 minutes)
   useEffect(() => {
@@ -400,26 +561,106 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [orderStatus?.status, orderId]);
+  }, [orderStatus?.status, activeOrderId]);
 
-  // Fetch ticket details when Confirmed
+  // Fetch ticket details when Confirmed with polling retry
   useEffect(() => {
-    if (orderStatus?.status === 'Confirmed') {
-      const fetchTicket = async () => {
+    if (orderStatus?.status !== 'Confirmed' || !activeOrderId) return;
+
+    let isMounted = true;
+    let pollCount = 0;
+    const maxPolls = 10;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+
+    const fetchTicket = async () => {
+      try {
+        let tickets: OrderTicket[] = [];
+
+        // 1. Try order-specific tickets endpoint first
         try {
-          const res = await apiFetch(`${BOOKING_API_URL}/api/booking/tickets`);
-          if (res.ok) {
-            const data = await res.json();
-            const matchedTicket = data.find((t: any) => t.orderId === orderId);
-            if (matchedTicket) {
-              setTicketDetails(matchedTicket);
+          const orderTicketsRes = await apiFetch(`${BOOKING_API_URL}/api/booking/orders/${activeOrderId}/tickets`);
+          if (orderTicketsRes.ok) {
+            const data = await orderTicketsRes.json();
+            if (Array.isArray(data) && data.length > 0) {
+              tickets = data;
             }
           }
-        } catch (e) { }
-      };
-      fetchTicket();
-    }
-  }, [orderStatus?.status, orderId, apiFetch]);
+        } catch { /* proceed to fallback */ }
+
+        // 2. Fall back to all customer tickets endpoint
+        if (tickets.length === 0) {
+          try {
+            const allRes = await apiFetch(`${BOOKING_API_URL}/api/booking/tickets`);
+            if (allRes.ok) {
+              const allData = await allRes.json();
+              if (Array.isArray(allData)) {
+                tickets = (allData as OrderTicket[]).filter(
+                  (t) => (t.orderId || '').toLowerCase() === activeOrderId.toLowerCase()
+                );
+              }
+            }
+          } catch { /* ignore network error */ }
+        }
+
+        if (!isMounted) return;
+
+        if (tickets.length > 0) {
+          setTicketDetails(tickets[0]);
+          setOrderTickets(tickets);
+
+          // Populate eventDetails if missing
+          if (!eventDetails && tickets[0].showId) {
+            try {
+              const eventsRes = await fetch(`${CATALOG_API_URL}/api/catalog/events`);
+              if (eventsRes.ok) {
+                const eventsData = await eventsRes.json();
+                const targetShowId = (tickets[0].showId as string).toLowerCase();
+                const matchedEvent = eventsData.find((e: any) =>
+                  e.shows?.some((s: any) => s.id?.toLowerCase() === targetShowId)
+                );
+                if (matchedEvent) {
+                  const matchedShow = matchedEvent.shows.find(
+                    (s: any) => s.id?.toLowerCase() === targetShowId
+                  );
+                  const cats = matchedShow?.ticketCategories ?? matchedEvent?.ticketCategories ?? [];
+                  const matchedCategory = cats.find(
+                    (c: any) => (c.id || c.categoryId)?.toLowerCase() === (tickets[0].categoryId as string)?.toLowerCase()
+                  );
+                  setEventDetails({
+                    bannerUrl: matchedEvent.coverImageUrl || matchedEvent.coverUrl || matchedEvent.bannerUrl || matchedEvent.imageUrl,
+                    posterUrl: matchedEvent.imageUrl || matchedEvent.bannerUrl || matchedEvent.coverImageUrl || matchedEvent.coverUrl,
+                    name: matchedEvent.name,
+                    date: matchedShow?.showDate,
+                    time: matchedShow?.showTime,
+                    categoryName: matchedCategory?.name || 'General Admission',
+                    categories: cats,
+                  });
+                }
+              }
+            } catch (err) {
+              console.warn('Failed to load event details for tickets', err);
+            }
+          }
+        } else if (pollCount < maxPolls) {
+          pollCount++;
+          timerId = setTimeout(fetchTicket, 1000);
+        }
+      } catch (err) {
+        console.warn('Error fetching tickets:', err);
+        if (isMounted && pollCount < maxPolls) {
+          pollCount++;
+          timerId = setTimeout(fetchTicket, 1500);
+        }
+      }
+    };
+
+    fetchTicket();
+
+    return () => {
+      isMounted = false;
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [orderStatus?.status, activeOrderId, apiFetch, eventDetails]);
 
   // Auto-redirect countdown on hold expiration
   const isExpiredState =
@@ -460,6 +701,104 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     );
   }
 
+  // If there is no activeOrderId yet, render Step 1: Seat Selection (for seated shows)
+  if (!activeOrderId) {
+    if (showId) {
+      return (
+        <div className="max-w-7xl mx-auto py-10 px-4 w-full min-h-screen animate-in fade-in duration-200">
+          <div className="mb-6 flex items-center justify-between">
+            <button
+              onClick={() => {
+                if (showEventData?.event?.id) {
+                  window.history.pushState({}, '', `/events/${showEventData.event.id}`);
+                  window.dispatchEvent(new PopStateEvent('popstate'));
+                } else if (window.history.length > 1) {
+                  window.history.back();
+                } else {
+                  onNavigateHome();
+                }
+              }}
+              className="inline-flex items-center gap-2 font-body font-bold text-xs md:text-sm text-ink-black bg-brand-white border-2 border-ink-black rounded-full px-4 py-2 hover:bg-surface-yellow cursor-pointer transition-all shadow-[3px_3px_0px_0px_#0A0A0F]"
+            >
+              <ArrowLeft size={16} />
+              <span>Back to Event</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <span className="font-heading font-extrabold text-xs uppercase px-3 py-1 bg-brand-blue text-brand-white rounded-full border border-ink-black shadow-[2px_2px_0px_0px_#0A0A0F]">
+                Step 1 of 2: Pick Your Seats
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-brand-white border-3 border-ink-black rounded-32 p-6 md:p-8 shadow-[8px_8px_0px_0px_#0A0A0F] mb-8 flex flex-col items-center">
+            <div className="mb-6 border-b-2 border-ink-gray-30 pb-4 text-center w-full">
+              <h1 className="font-heading font-extrabold text-2xl md:text-3xl text-ink-black mb-1">
+                Select Your Seats
+              </h1>
+              <p className="font-body text-sm text-ink-gray-70 max-w-2xl mx-auto">
+                {showEventData?.event?.name ? `${showEventData.event.name} · ` : ''}
+                Choose your preferred seats on the interactive map below to continue to checkout.
+              </p>
+            </div>
+
+            {seatStepError && (
+              <div role="alert" className="bg-red-50 border-2 border-red-500 rounded-2xl p-4 text-[#FF3B3B] font-body font-medium text-sm mb-6 shadow-sm w-full max-w-2xl text-center">
+                {seatStepError}
+              </div>
+            )}
+
+            <div className="w-full max-w-3xl flex flex-col items-center">
+              <SeatSelection
+                showId={showId}
+                categories={seatCategories}
+                targetCount={targetCount}
+                isAuthenticated={isAuthenticated}
+                onLogin={login}
+                onHold={(seats) => handleSeatHoldAndProceed(seats)}
+                disabled={isHoldingSeats}
+              />
+            </div>
+          </div>
+
+          {showId && (
+            <WaitingRoomPopUp
+              isOpen={isWaitingRoomOpen}
+              showId={showId}
+              apiFetch={apiFetch}
+              onAdmitted={async (token) => {
+                setAdmissionToken(token);
+                setIsWaitingRoomOpen(false);
+                if (pendingSeats) {
+                  const seats = pendingSeats;
+                  setPendingSeats(null);
+                  await handleSeatHoldAndProceed(seats, token);
+                }
+              }}
+              onClose={() => setIsWaitingRoomOpen(false)}
+            />
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
+        <div className="w-16 h-16 rounded-full bg-rose-100 border-2 border-ink-black flex items-center justify-center text-rose-600 mb-4 shadow-brutal-s">
+          <AlertCircle size={36} />
+        </div>
+        <h2 className="font-heading font-extrabold text-2xl text-ink-black mb-2">No Order Specified</h2>
+        <p className="font-body text-ink-gray-70 mb-6">Please select an event to start checkout.</p>
+        <button
+          onClick={onNavigateHome}
+          className="bg-brand-blue hover:bg-[#15155E] text-brand-white font-heading font-bold px-6 py-3 rounded-full border-2 border-ink-black shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all cursor-pointer flex items-center gap-2"
+        >
+          <ArrowLeft size={18} />
+          <span>Return to Events</span>
+        </button>
+      </div>
+    );
+  }
+
   if (error || !orderStatus) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center p-6 text-center max-w-md mx-auto">
@@ -479,6 +818,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
     );
   }
 
+  if (orderStatus.status === 'Cancelled') {
+    return <div className="max-w-xl mx-auto p-8">
+      <h1 className="text-2xl font-bold">Order cancelled</h1>
+      <OrderCancellation orderId={activeOrderId} cancelled />
+      <button onClick={onNavigateHome} className="mt-6">Return to events</button>
+    </div>;
+  }
+
   if (orderStatus.status === 'Confirmed') {
     return (
       <div className="min-h-[calc(100vh-80px)] w-full flex flex-col animate-in fade-in zoom-in duration-300 max-w-7xl mx-auto items-center justify-center px-6">
@@ -486,25 +833,52 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
 
           {/* Left Column: Ticket (2/3 width on large screens) */}
           <div className="w-full lg:w-2/3 flex flex-col justify-center">
-            {ticketDetails && eventDetails && (
-              <Ticket
-                eventDetails={eventDetails}
-                ticketDetails={{
-                  ...ticketDetails,
-                  customerName: `${customerDetails.firstName} ${customerDetails.lastName}`,
-                  price: orderStatus.totalAmount
-                }}
-              />
+            {ticketDetails && (
+              <div className="flex flex-col gap-8 w-full">
+                {(orderTickets.length > 0 ? orderTickets : [ticketDetails]).map((ticket: OrderTicket, index: number, all: OrderTicket[]) => (
+                  <Ticket
+                    key={ticket.id ?? ticket.uniqueCode ?? index}
+                    eventDetails={{
+                      name: eventDetails?.name || 'TicketHive Event',
+                      date: eventDetails?.date || orderStatus.createdAt || new Date().toISOString(),
+                      time: eventDetails?.time || '',
+                      bannerUrl: eventDetails?.bannerUrl,
+                      posterUrl: eventDetails?.posterUrl,
+                      categoryName:
+                        (eventDetails?.categories as ShowCategory[] | undefined)?.find(
+                          (c) => (c.id || c.categoryId)?.toLowerCase() === (ticket.categoryId ?? '')?.toLowerCase()
+                        )?.name ??
+                        eventDetails?.categoryName ??
+                        'General Admission',
+                    }}
+                    ticketDetails={{
+                      ...ticket,
+                      orderId: ticket.orderId || activeOrderId || '',
+                      uniqueCode: ticket.uniqueCode || (ticket as any).code || 'TKT',
+                      customerName: `${customerDetails.firstName} ${customerDetails.lastName}`.trim() || 'Ticket Holder',
+                      // A single ticket shows what was paid for the order; several show their own price.
+                      price: all.length === 1 ? orderStatus.totalAmount : ticket.price
+                    }}
+                  />
+                ))}
+              </div>
             )}
             {!ticketDetails && (
-              <div className="w-full bg-[#F9F9FF] border-2 border-ink-black rounded-24 p-4 text-left">
-                <div className="flex justify-between py-1 text-sm border-b border-ink-gray-30">
+              <div className="w-full bg-[#F9F9FF] border-2 border-ink-black rounded-24 p-6 text-left flex flex-col gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 rounded-full border-2 border-brand-blue border-t-transparent animate-spin shrink-0" />
+                  <span className="font-heading font-bold text-base text-ink-black">Issuing your tickets...</span>
+                </div>
+                <p className="font-body text-xs text-ink-gray-70">
+                  Please wait a moment while your digital ticket and entry QR code are being generated.
+                </p>
+                <div className="flex justify-between py-1 text-sm border-t border-ink-gray-30 pt-3">
                   <span className="font-bold text-ink-gray-70">Order Reference:</span>
-                  <span className="font-mono text-ink-black font-bold">{orderStatus.orderId.slice(0, 13)}</span>
+                  <span className="font-mono text-ink-black font-bold">{(orderStatus.orderId || activeOrderId || '').slice(0, 13)}</span>
                 </div>
                 <div className="flex justify-between py-1 text-sm">
-                  <span className="font-bold text-ink-gray-70">Status:</span>
-                  <span className="font-bold text-emerald-600">CONFIRMED & ISSUED</span>
+                  <span className="font-bold text-ink-gray-70">Payment Status:</span>
+                  <span className="font-bold text-emerald-600">CONFIRMED</span>
                 </div>
               </div>
             )}
@@ -524,6 +898,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
               </p>
 
               <div className="mt-auto w-full flex flex-col gap-3">
+                {activeOrderId && (
+                  <OrderCancellation
+                    orderId={activeOrderId}
+                    cancelled={(orderStatus.status as string) === 'Cancelled'}
+                    onCancelled={() => setOrderStatus((prev) => (prev ? { ...prev, status: 'Cancelled' } : null))}
+                  />
+                )}
                 <button
                   onClick={() => {
                     window.history.pushState({}, '', '/my-tickets');
@@ -731,7 +1112,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ orderId, onNavigateH
 
             <div className="flex justify-between items-center text-sm">
               <span className="font-body text-ink-gray-70 font-semibold">Order ID:</span>
-              <span className="font-mono text-ink-black font-bold">{orderId}</span>
+              <span className="font-mono text-ink-black font-bold">{activeOrderId}</span>
             </div>
 
             <div className="flex justify-between items-center text-sm">

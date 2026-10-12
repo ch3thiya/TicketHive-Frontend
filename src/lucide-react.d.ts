@@ -13,6 +13,7 @@ declare module 'lucide-react' {
   export const Eye: Icon;
   export const EyeOff: Icon;
   export const MapPin: Icon;
+  export const Menu: Icon;
   export const Plus: Icon;
   export const Calendar: Icon;
   export const Upload: Icon;
@@ -47,6 +48,7 @@ declare module 'lucide-react' {
   export const XCircle: Icon;
   export const ShieldCheck: Icon;
   export const History: Icon;
+  export const Minus: Icon;
 
   export const icons: Record<string, Icon>;
 }

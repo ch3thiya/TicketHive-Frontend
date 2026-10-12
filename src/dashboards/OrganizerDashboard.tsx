@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import { SeatMapRequestPanel } from '../components/SeatMapRequestPanel';
+import { ShowSalesPanel } from '../components/ShowSalesPanel';
 import {
   ArrowLeft,
   Calendar,
@@ -24,6 +26,9 @@ import { AddShowPopUp } from '../popUps/AddShowPopUp';
 import { EditShowPopUp } from '../popUps/EditShowPopUp';
 import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
 import { fetchVenues, type Venue } from '../common/venueApi';
+import { fetchOrganizerAccessStatus } from '../common/organizerStatusApi';
+import type { ProblemDetailsBody } from '../common/problemDetails';
+import { SuspendedOrganizerBanner } from '../components/SuspendedOrganizerBanner';
 
 const CATALOG_API_URL =
   import.meta.env.VITE_CATALOG_API_URL || '';
@@ -78,6 +83,10 @@ export const OrganizerDashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  // A suspended organizer can still read their events but every write is refused by the backend.
+  const [isSuspended, setIsSuspended] = useState(false);
+  const [cancellingShowId, setCancellingShowId] = useState<string | null>(null);
+  const suspendedHint = isSuspended ? 'Unavailable while your account is suspended' : undefined;
 
   // Modals
   const [isCreateEventOpen, setIsCreateEventOpen] = useState(false);
@@ -91,12 +100,14 @@ export const OrganizerDashboard: React.FC = () => {
     title: string;
     description: React.ReactNode;
     confirmText: string;
+    cancelText?: string;
     onConfirm: () => void;
   }>({
     isOpen: false,
     title: '',
     description: '',
     confirmText: 'Delete',
+    cancelText: 'Cancel',
     onConfirm: () => {}
   });
 
@@ -145,6 +156,13 @@ export const OrganizerDashboard: React.FC = () => {
     }
   };
 
+  // Reads the backend's answer for a failed write. A 403 with the OrganizerSuspended code means the
+  // account was suspended after this page loaded, so the page switches to its read-only state.
+  const errorMessage = (data: ProblemDetailsBody | null): string | undefined => {
+    if (data?.code === 'OrganizerSuspended') setIsSuspended(true);
+    return data?.detail || data?.message;
+  };
+
   // Fetch organizer events
   const fetchEvents = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -186,9 +204,14 @@ export const OrganizerDashboard: React.FC = () => {
   useEffect(() => {
     if (isAuthenticated && role === 'organizer') {
       fetchEvents();
+      fetchOrganizerAccessStatus(apiFetch)
+        .then((status) => setIsSuspended(status === 'suspended'))
+        .catch(() => {
+          // Writes are still enforced by the backend; the banner is only a courtesy.
+        });
       fetchVenuesList();
     }
-  }, [isAuthenticated, role, fetchEvents, fetchVenuesList]);
+  }, [isAuthenticated, role, apiFetch, fetchEvents, fetchVenuesList]);
 
   // Image Upload helper
   const handleImageChange = (
@@ -290,7 +313,7 @@ export const OrganizerDashboard: React.FC = () => {
         const errorData = await res.json().catch(() => null);
 
         showNotification(
-          errorData?.message || 'Failed to create event.',
+          errorMessage(errorData) || 'Failed to create event.',
           true
         );
       }
@@ -352,7 +375,7 @@ export const OrganizerDashboard: React.FC = () => {
         const errorData = await res.json().catch(() => null);
 
         showNotification(
-          errorData?.message || 'Failed to update event.',
+          errorMessage(errorData) || 'Failed to update event.',
           true
         );
       }
@@ -397,7 +420,7 @@ export const OrganizerDashboard: React.FC = () => {
           } else {
             const errorData = await res.json().catch(() => null);
             showNotification(
-              errorData?.message || 'Failed to cancel event.',
+              errorMessage(errorData) || 'Failed to cancel event.',
               true
             );
           }
@@ -440,7 +463,7 @@ export const OrganizerDashboard: React.FC = () => {
           } else {
             const errorData = await res.json().catch(() => null);
             showNotification(
-              errorData?.detail || errorData?.message || 'Failed to delete event.',
+              errorMessage(errorData) || 'Failed to delete event.',
               true
             );
           }
@@ -476,7 +499,7 @@ export const OrganizerDashboard: React.FC = () => {
         const errorData = await res.json().catch(() => null);
 
         showNotification(
-          errorData?.message ||
+          errorMessage(errorData) ||
             'Failed to publish event. Ensure at least one active show and ticket category exists.',
           true
         );
@@ -635,7 +658,7 @@ export const OrganizerDashboard: React.FC = () => {
         const errorData = await res.json().catch(() => null);
 
         showNotification(
-          errorData?.message || 'Failed to create show.',
+          errorMessage(errorData) || 'Failed to create show.',
           true
         );
       }
@@ -707,7 +730,7 @@ export const OrganizerDashboard: React.FC = () => {
         const errorData = await res.json().catch(() => null);
 
         showNotification(
-          errorData?.message || 'Failed to update show.',
+          errorMessage(errorData) || 'Failed to update show.',
           true
         );
       }
@@ -728,12 +751,13 @@ export const OrganizerDashboard: React.FC = () => {
     setConfirmModal({
       isOpen: true,
       title: 'Cancel Show?',
-      description: 'Are you sure you want to cancel this performance show? This will set its status to Cancelled.',
-      confirmText: 'Cancel Show',
+      description: 'Cancel this entire show? A full refund will be requested for all ticket holders. This cannot be undone once confirmed.',
+      confirmText: 'Confirm cancellation',
+      cancelText: 'Keep show',
       onConfirm: async () => {
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         try {
           setIsLoading(true);
+          setCancellingShowId(showId);
 
           const res = await apiFetch(
             `${CATALOG_API_URL}/api/catalog/shows/${showId}/cancel`,
@@ -748,7 +772,7 @@ export const OrganizerDashboard: React.FC = () => {
           } else {
             const errorData = await res.json().catch(() => null);
             showNotification(
-              errorData?.message || 'Failed to cancel show.',
+              errorMessage(errorData) || 'Failed to cancel show.',
               true
             );
           }
@@ -757,6 +781,8 @@ export const OrganizerDashboard: React.FC = () => {
           showNotification('Error cancelling show.', true);
         } finally {
           setIsLoading(false);
+          setCancellingShowId(null);
+          setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         }
       }
     });
@@ -927,7 +953,9 @@ export const OrganizerDashboard: React.FC = () => {
       )}
 
       {/* 2. Main Content */}
-      <main className="flex-grow max-w-8xl w-full mx-auto px-6 py-8">
+      <main className="flex-grow max-w-8xl w-full mx-auto px-6 py-8 [&_button:disabled]:opacity-50 [&_button:disabled]:cursor-not-allowed">
+
+        {isSuspended && <SuspendedOrganizerBanner />}
 
         {/* Header CTA */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
@@ -942,6 +970,8 @@ export const OrganizerDashboard: React.FC = () => {
               resetEventForm();
               setIsCreateEventOpen(true);
             }}
+disabled={isSuspended}
+title={suspendedHint}
             className="font-body font-bold text-[14px] text-ink-black bg-[#FFE94D] border-3 border-ink-black rounded-full px-6 py-3 hover:bg-[#F3DC3C] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s select-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:shadow-[1px_1px_0px_0px_#0A0A0F] flex items-center gap-2"
           >
             <Plus size={16} strokeWidth={3} />
@@ -978,6 +1008,8 @@ export const OrganizerDashboard: React.FC = () => {
                 resetEventForm();
                 setIsCreateEventOpen(true);
               }}
+disabled={isSuspended}
+title={suspendedHint}
               className="font-body font-bold text-sm bg-brand-blue text-brand-white border-2.5 border-ink-black rounded-full px-6 py-2.5 shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all cursor-pointer"
             >
               Create First Event
@@ -1054,7 +1086,7 @@ export const OrganizerDashboard: React.FC = () => {
                           onClick={() =>
                             handlePublishEvent(evt.id)
                           }
-                          disabled={!hasCategories || isLoading}
+                          disabled={!hasCategories || isLoading || isSuspended}
                           title={
                             !hasCategories
                               ? 'Event requires at least one show with ticket categories before publishing'
@@ -1072,6 +1104,8 @@ export const OrganizerDashboard: React.FC = () => {
                           onClick={() =>
                             openEditEventModal(evt)
                           }
+disabled={isSuspended}
+title={suspendedHint}
                           className="font-body font-bold text-[13px] text-ink-black bg-brand-white border-2 border-ink-black rounded-full px-3.5 py-1.5 hover:bg-brand-blue-light transition-all cursor-pointer shadow-sm flex items-center gap-1.5 select-none"
                         >
                           <Edit3 size={13} />
@@ -1087,6 +1121,8 @@ export const OrganizerDashboard: React.FC = () => {
                               evt.name
                             )
                           }
+disabled={isSuspended}
+title={suspendedHint}
                           className="font-body font-bold text-[13px] text-[#FF3B3B] bg-brand-white border-2 border-ink-black rounded-full px-3.5 py-1.5 hover:bg-red-50 transition-all cursor-pointer shadow-sm flex items-center gap-1.5 select-none"
                         >
                           <Ban size={13} />
@@ -1102,6 +1138,8 @@ export const OrganizerDashboard: React.FC = () => {
                               evt.name
                             )
                           }
+disabled={isSuspended}
+title={suspendedHint}
                           className="font-body font-bold text-[13px] text-white bg-[#E02F2F] hover:bg-[#b82222] border-2 border-ink-black rounded-full px-3.5 py-1.5 transition-all cursor-pointer shadow-brutal-s flex items-center gap-1.5 select-none hover:-translate-x-0.5 hover:-translate-y-0.5"
                         >
                           <Trash2 size={13} />
@@ -1188,7 +1226,7 @@ export const OrganizerDashboard: React.FC = () => {
                         </h3>
 
                         <span className="text-xs font-bold bg-ink-gray-30 text-ink-black px-2.5 py-0.5 rounded-full">
-                          {evt.shows?.length || 0}
+                          {evt.shows?.filter((s) => s.status !== 'Cancelled').length || 0}
                         </span>
                       </div>
 
@@ -1197,6 +1235,8 @@ export const OrganizerDashboard: React.FC = () => {
                           onClick={() =>
                             openAddShowModal(evt)
                           }
+disabled={isSuspended}
+title={suspendedHint}
                           className="font-body font-bold text-[12px] text-brand-blue bg-brand-white border-2 border-ink-black rounded-full px-3.5 py-1 hover:bg-brand-blue-light transition-all cursor-pointer flex items-center gap-1 shadow-sm select-none"
                         >
                           <Plus
@@ -1210,7 +1250,7 @@ export const OrganizerDashboard: React.FC = () => {
 
                     {/* Shows List */}
                     {!evt.shows ||
-                    evt.shows.length === 0 ? (
+                    evt.shows.filter((s) => s.status !== 'Cancelled').length === 0 ? (
                       <div className="bg-[#F9F9FC] border-2 border-dashed border-ink-gray-30 rounded-20 p-5 text-center">
                         <p className="text-xs text-ink-gray-70 font-medium">
                           No shows scheduled yet. Add a show
@@ -1221,18 +1261,15 @@ export const OrganizerDashboard: React.FC = () => {
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-                        {evt.shows.map((show) => {
-                          const isShowCancelled =
-                            show.status === 'Cancelled';
+                        {evt.shows
+                          .filter((show) => show.status !== 'Cancelled')
+                          .map((show) => {
+                          const isShowCancelled = false;
 
                           return (
                             <div
                               key={show.id}
-                              className={`bg-[#F9F9FC] border-2 border-ink-black rounded-20 p-5 flex flex-col gap-3.5 ${
-                                isShowCancelled
-                                  ? 'opacity-60 bg-red-50/50'
-                                  : ''
-                              }`}
+                              className="bg-[#F9F9FC] border-2 border-ink-black rounded-20 p-5 flex flex-col gap-3.5"
                             >
 
                               {/* Show Header */}
@@ -1255,13 +1292,7 @@ export const OrganizerDashboard: React.FC = () => {
                                   </span>
                                 </div>
 
-                                <span
-                                  className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                                    isShowCancelled
-                                      ? 'bg-red-100 text-state-error border-state-error'
-                                      : 'bg-[#00C875]/20 text-[#00875A] border-[#00875A]'
-                                  }`}
-                                >
+                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-[#00C875]/20 text-[#00875A] border-[#00875A]">
                                   {show.status}
                                 </span>
                               </div>
@@ -1375,6 +1406,10 @@ export const OrganizerDashboard: React.FC = () => {
                                 </div>
                               </div>
 
+                              {!isShowCancelled && !isCancelled && (
+                                <SeatMapRequestPanel showId={show.id} disabled={isSuspended} disabledHint={suspendedHint} />
+                              )}
+
                               {/* Show Actions */}
                               {!isShowCancelled &&
                                 !isCancelled && (
@@ -1386,6 +1421,8 @@ export const OrganizerDashboard: React.FC = () => {
                                           show
                                         )
                                       }
+disabled={isSuspended}
+title={suspendedHint}
                                       className="text-xs font-bold text-ink-black hover:text-brand-blue flex items-center gap-1 cursor-pointer py-1 px-2"
                                     >
                                       <Edit3 size={12} />
@@ -1398,11 +1435,17 @@ export const OrganizerDashboard: React.FC = () => {
                                           show.id
                                         )
                                       }
-                                      className="text-xs font-bold text-state-error hover:text-red-700 flex items-center gap-1 cursor-pointer py-1 px-2"
+                                      disabled={isSuspended || cancellingShowId === show.id}
+                                      title={suspendedHint}
+                                      className="text-xs font-heading font-bold text-state-error hover:text-red-700 bg-rose-50 hover:bg-rose-100 border border-ink-black rounded-full shadow-[2px_2px_0px_0px_#0A0A0F] active:shadow-none hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-0 active:translate-y-0 flex items-center gap-1 cursor-pointer py-1 px-2.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                      <Ban size={12} />
+                                      {cancellingShowId === show.id ? (
+                                        <div className="w-3 h-3 border-2 border-state-error border-t-transparent rounded-full animate-spin" />
+                                      ) : (
+                                        <Ban size={12} />
+                                      )}
                                       <span>
-                                        Cancel Show
+                                        {cancellingShowId === show.id ? 'Cancelling...' : 'Cancel Show'}
                                       </span>
                                     </button>
 
@@ -1414,6 +1457,54 @@ export const OrganizerDashboard: React.FC = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Show Sales Section */}
+                  {evt.shows && evt.shows.length > 0 && !isCancelled && (
+                    <div className="border-t-2 border-ink-gray-30 pt-5 flex flex-col gap-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-heading font-bold text-[18px] text-ink-black">
+                            Show Sales
+                          </h3>
+                          <span className="text-xs font-bold bg-brand-blue-light text-brand-blue px-2.5 py-0.5 rounded-full border border-brand-blue/30">
+                            {evt.shows.filter((s) => s.status !== 'Cancelled').length} Active
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {evt.shows.map((show) => {
+                          const isShowCancelled = show.status === 'Cancelled';
+                          if (isShowCancelled) return null;
+
+                          return (
+                            <div
+                              key={`sales-${show.id}`}
+                              className="bg-[#F9F9FC] border-2 border-ink-black rounded-20 p-5 flex flex-col gap-3.5 shadow-sm"
+                            >
+                              <div className="flex items-center justify-between border-b border-ink-gray-30 pb-2.5">
+                                <div className="flex items-center gap-2">
+                                  <Calendar size={15} className="text-brand-blue" />
+                                  <span className="font-bold text-sm text-ink-black">
+                                    {show.showDate} ·{' '}
+                                    {show.showTime ? show.showTime.substring(0, 5) : ''}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full border bg-[#00C875]/20 text-[#00875A] border-[#00875A]">
+                                  {show.status}
+                                </span>
+                              </div>
+
+                              <ShowSalesPanel
+                                showId={show.id}
+                                categories={show.ticketCategories ?? []}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1521,6 +1612,7 @@ export const OrganizerDashboard: React.FC = () => {
         title={confirmModal.title}
         description={confirmModal.description}
         confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
         isLoading={isLoading}
       />
 

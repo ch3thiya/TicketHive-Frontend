@@ -8,6 +8,8 @@ export interface EventCardProps {
   emoji?: string;
   venue?: string;
   price?: string;
+  // True while the organizer is suspended: the event is visible but cannot be bought.
+  salesPaused?: boolean;
   onClick?: () => void;
 }
 
@@ -17,6 +19,7 @@ export const EventCard: React.FC<EventCardProps> = ({
   image,
   category,
   emoji,
+  salesPaused = false,
   onClick,
 }) => {
   return (
@@ -43,6 +46,12 @@ export const EventCard: React.FC<EventCardProps> = ({
               <span className="text-5xl select-none">🎟️</span>
             )}
           </div>
+        )}
+
+        {salesPaused && (
+          <span className="absolute bottom-4 left-4 z-10 bg-[#FFF7E5] border-[2.5px] border-ink-black text-[#B27A00] font-body font-bold text-[11px] py-1 px-3 rounded-full uppercase tracking-wider select-none shadow-brutal-s">
+            Sales paused
+          </span>
         )}
 
         {category && (
