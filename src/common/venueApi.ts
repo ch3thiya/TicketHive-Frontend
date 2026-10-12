@@ -8,6 +8,22 @@ export interface Venue {
   capacity: number;
   createdAt: string;
   updatedAt: string;
+  seatMap?: VenueSeatMap | null;
+}
+
+export interface VenueSeatMapSection {
+  name: string;
+  rows: number;
+  seatsPerRow: number;
+}
+
+export interface VenueSeatMap {
+  venueId: string;
+  spec: { sections: VenueSeatMapSection[] };
+  seatCount: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface VenueInput {
@@ -49,6 +65,12 @@ export async function fetchVenues(apiFetch: ApiFetch): Promise<Venue[]> {
   return res.json();
 }
 
+export async function fetchVenue(apiFetch: ApiFetch, id: string): Promise<Venue> {
+  const res = await apiFetch(`${CATALOG_API_URL}/api/catalog/venues/${id}`);
+  if (!res.ok) throw new Error(await extractErrorMessage(res, 'Failed to load the venue.'));
+  return res.json();
+}
+
 export async function createVenue(apiFetch: ApiFetch, input: VenueInput): Promise<Venue> {
   const res = await apiFetch(`${CATALOG_API_URL}/api/catalog/venues`, {
     method: 'POST',
@@ -79,5 +101,24 @@ export async function deleteVenue(apiFetch: ApiFetch, id: string): Promise<void>
   });
   if (!res.ok) {
     throw new Error(await extractErrorMessage(res, 'Failed to delete venue.'));
+  }
+}
+
+export async function saveVenueSeatMap(apiFetch: ApiFetch, venueId: string, sections: VenueSeatMapSection[]): Promise<VenueSeatMap> {
+  const res = await apiFetch(`${CATALOG_API_URL}/api/catalog/venues/${venueId}/seat-map`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sections })
+  });
+  if (!res.ok) {
+    throw new Error(await extractErrorMessage(res, 'Failed to save the seat map.'));
+  }
+  return res.json();
+}
+
+export async function deleteVenueSeatMap(apiFetch: ApiFetch, venueId: string): Promise<void> {
+  const res = await apiFetch(`${CATALOG_API_URL}/api/catalog/venues/${venueId}/seat-map`, { method: 'DELETE' });
+  if (!res.ok) {
+    throw new Error(await extractErrorMessage(res, 'Failed to delete the seat map.'));
   }
 }

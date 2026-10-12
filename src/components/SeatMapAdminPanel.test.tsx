@@ -241,7 +241,7 @@ describe('seat layout builder', () => {
     await user.click(screen.getByRole('button', { name: /enable version 1/i }));
 
     expect(await screen.findByRole('status')).toHaveTextContent(/version 1 is enabled/i);
-    expect(await screen.findByText('Completed')).toBeInTheDocument();
+    expect(await within(screen.getByRole('dialog', { name: /build seat layout/i })).findByText('Completed')).toBeInTheDocument();
   });
 
   it.each([
@@ -259,13 +259,14 @@ describe('seat layout builder', () => {
     expect(screen.getByRole('button', { name: /enable version 1/i })).toBeEnabled();
   });
 
-  it('loads an earlier version into the builder', async () => {
+  it('starts from the current version without showing a load-map control', async () => {
     currentDetail = detail({ layouts: [layout({ version: 2, spec: { sections: [{ name: 'Balcony', categoryId: 'vip', rows: 1, seatsPerRow: 6 }] } })] });
     route();
     const user = userEvent.setup();
     await openBuilder(user);
 
     expect(screen.getByLabelText('Section 1 name')).toHaveValue('Balcony');
+    expect(screen.queryByRole('button', { name: /load version/i })).not.toBeInTheDocument();
   });
 });
 
@@ -283,12 +284,12 @@ describe('rejecting a request', () => {
     await openBuilder(user);
 
     await user.click(screen.getByRole('button', { name: /^reject request$/i }));
-    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /reject request/i }));
+    await user.click(within(screen.getByRole('dialog', { name: /reject the seat map request/i })).getByRole('button', { name: /reject request/i }));
     expect(await screen.findByText(/enter a reason/i)).toBeInTheDocument();
     expect(body).toBeUndefined();
 
     await user.type(screen.getByLabelText(/reason/i), 'Venue plan missing');
-    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /reject request/i }));
+    await user.click(within(screen.getByRole('dialog', { name: /reject the seat map request/i })).getByRole('button', { name: /reject request/i }));
 
     expect(body).toEqual({ reason: 'Venue plan missing' });
     expect(await screen.findByText(/rejected: venue plan missing/i)).toBeInTheDocument();
