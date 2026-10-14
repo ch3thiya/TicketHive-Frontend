@@ -17,8 +17,11 @@ export function OrderCancellation({ orderId, cancelled = false, used = false, on
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const base = `${import.meta.env.VITE_BOOKING_API_URL || ''}/api/booking/orders/${orderId}`;
+  const shouldPoll = cancelled || state !== null;
 
   useEffect(() => {
+    if (!shouldPoll) return;
+
     let active = true;
     const load = async () => {
       try {
@@ -27,7 +30,7 @@ export function OrderCancellation({ orderId, cancelled = false, used = false, on
           const next: CancellationState = await response.json();
           setState(next);
           if (next.refundStatus !== 'Pending' && next.inventoryReturned &&
-              ['Sent', 'Simulated', 'NeedsReconciliation', 'MissingRecipient'].includes(next.notificationStatus)) {
+              ['Sent', 'Simulated', 'NotRequired', 'NeedsReconciliation', 'MissingRecipient'].includes(next.notificationStatus)) {
             window.clearInterval(timer);
           }
         }
@@ -37,7 +40,7 @@ export function OrderCancellation({ orderId, cancelled = false, used = false, on
     void load();
     const timer = window.setInterval(() => { void load(); }, 5000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [apiFetch, base]);
+  }, [apiFetch, base, shouldPoll]);
 
   const cancel = async () => {
     setBusy(true);
