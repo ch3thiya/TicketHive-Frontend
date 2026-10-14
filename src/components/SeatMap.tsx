@@ -17,7 +17,7 @@ interface SeatMapProps {
   onToggle: (seat: SeatMapSeat, section: string, row: string) => void;
 }
 
-const money = (value: number) => `$${value.toFixed(0)}`;
+const money = (value: number) => `Rs. ${value.toFixed(2)} LKR`;
 
 // Colour is never the only signal: every state also has its own mark and an accessible name.
 const STATE_STYLES: Record<SeatState | 'Selected', { className: string; mark: string; text: string }> = {
