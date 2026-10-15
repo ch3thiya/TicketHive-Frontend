@@ -89,6 +89,10 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({
     const lost = selectedRef.current.filter((seat) => next.has(seat.id));
     if (lost.length > 0) {
       setSelected((current) => current.filter((seat) => !next.has(seat.id)));
+      const names = lost.map(seatLabel).join(', ');
+      setNotice(
+        `${names} ${lost.length === 1 ? 'was' : 'were'} just taken and removed from your selection.`,
+      );
     }
   }, []);
 

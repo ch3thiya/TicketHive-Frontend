@@ -89,6 +89,7 @@ function stubFetch({ mode = 'Seated', hold, activeHold }: Stub = {}) {
 }
 
 afterEach(() => {
+  window.history.replaceState({}, '', '/');
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -97,67 +98,26 @@ const holdCalls = (fetchMock: ReturnType<typeof stubFetch>) =>
   fetchMock.mock.calls.filter(([url, options]) => String(url).endsWith('/api/inventory/holds') && (options as RequestInit | undefined)?.method === 'POST');
 
 describe('EventDetail on a seated show', () => {
-  it('shows the seat map instead of the ticket quantity picker', async () => {
+  it('routes seat selection through checkout instead of embedding a seat map', async () => {
     stubFetch();
 
     render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
 
-    expect(await screen.findByRole('button', { name: /Front row A seat 1, VIP, \$120, available/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /checkout/i })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Seat map' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /buy now/i })).not.toBeInTheDocument();
   });
 
-  it('holds exactly the chosen seats and opens the hold confirmation with their names', async () => {
+  it('opens checkout with the show and requested ticket count without creating a hold', async () => {
     const fetchMock = stubFetch();
     const user = userEvent.setup();
     render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
 
-    await user.click(await screen.findByRole('button', { name: /Front row A seat 2/ }));
-    await user.click(screen.getByRole('button', { name: /Hall row A seat 1/ }));
-    await user.click(screen.getByRole('button', { name: 'Hold 2 seats' }));
+    await user.click(await screen.findByRole('button', { name: /checkout/i }));
 
-    expect(await screen.findByText('Ticket Hold Confirmed!')).toBeInTheDocument();
-    expect(screen.getByText('Front A2, Hall A1 × 2')).toBeInTheDocument();
-    expect(screen.getByText('Rs. 160.00 LKR')).toBeInTheDocument();
-    const [calls] = [holdCalls(fetchMock)];
-    expect(calls).toHaveLength(1);
-    const init = calls[0][1] as RequestInit;
-    expect(JSON.parse(String(init.body))).toEqual({ showId: 'show-1', seatIds: ['f2', 'h1'] });
-    expect((init.headers as Record<string, string>)['Idempotency-Key']).toMatch(/^seat-/);
-  });
-
-  it('tells the customer which seat was taken and holds nothing', async () => {
-    stubFetch({
-      hold: () =>
-        json(
-          {
-            detail: 'Front A2 is no longer available. No seats were held; choose again.',
-            code: 'SeatsUnavailable',
-            unavailableSeats: [{ seatId: 'f2', categoryId: 'vip', section: 'Front', row: 'A', number: 2 }],
-          },
-          409,
-        ),
-    });
-    const user = userEvent.setup();
-    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
-
-    await user.click(await screen.findByRole('button', { name: /Front row A seat 2/ }));
-    await user.click(screen.getByRole('button', { name: 'Hold 1 seat' }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent('Front A2 is no longer available. No seats were held; choose again.');
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  });
-
-  it('opens the waiting room when admission is required and holds the same seats once admitted', async () => {
-    const fetchMock = stubFetch({ hold: () => json({ title: 'Admission required' }, 403) });
-    const user = userEvent.setup();
-    render(<EventDetail eventId="evt-1" onNavigateBack={vi.fn()} />);
-
-    await user.click(await screen.findByRole('button', { name: /Hall row A seat 2/ }));
-    await user.click(screen.getByRole('button', { name: 'Hold 1 seat' }));
-
-    await vi.waitFor(() => expect(holdCalls(fetchMock)).toHaveLength(1));
-    // The queue pop-up opens; the seats stay chosen for the retry.
-    expect(await screen.findByText(/in the queue/i)).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/checkout');
+    expect(window.location.search).toBe('?showId=show-1&count=1');
+    expect(holdCalls(fetchMock)).toHaveLength(0);
   });
 
   it('restores a seated hold after a reload with the seat names', async () => {
