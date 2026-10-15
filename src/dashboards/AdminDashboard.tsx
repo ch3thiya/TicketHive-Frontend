@@ -3,11 +3,12 @@ import { useAuth } from '../auth/AuthContext';
 import { ArrowLeft, MapPin, Plus, Edit3, Trash2 } from 'lucide-react';
 import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
 import { VenueFormPopUp } from '../popUps/VenueFormPopUp';
+import { VenueSeatMapPopUp } from '../popUps/VenueSeatMapPopUp';
 import { SuspendOrganizerPopUp } from '../popUps/SuspendOrganizerPopUp';
 import { OrganizerStatusBadge } from '../components/OrganizerStatusBadge';
 import { SeatMapAdminPanel } from '../components/SeatMapAdminPanel';
 import { fetchOrganizers, suspendOrganizer, reinstateOrganizer, type AdminOrganizer } from '../common/organizerAdminApi';
-import { fetchVenues, createVenue, updateVenue, deleteVenue, type Venue, type VenueInput } from '../common/venueApi';
+import { fetchVenues, createVenue, updateVenue, deleteVenue, saveVenueSeatMap, deleteVenueSeatMap, type Venue, type VenueInput, type VenueSeatMapSection } from '../common/venueApi';
 
 interface PendingRequest {
   requestId: string;
@@ -67,6 +68,10 @@ export const AdminDashboard: React.FC = () => {
   const [deletingVenue, setDeletingVenue] = useState<Venue | null>(null);
   const [venueDeleteLoading, setVenueDeleteLoading] = useState(false);
   const [venueActionError, setVenueActionError] = useState<string | null>(null);
+  const [seatMapVenue, setSeatMapVenue] = useState<Venue | null>(null);
+  const [seatMapLoading, setSeatMapLoading] = useState(false);
+  const [seatMapError, setSeatMapError] = useState<string | null>(null);
+  const [isSeatMapDeleteOpen, setIsSeatMapDeleteOpen] = useState(false);
 
   const fetchPendingRequests = useCallback(async () => {
     try {
@@ -260,6 +265,38 @@ export const AdminDashboard: React.FC = () => {
       setIsVenueDeleteOpen(false);
     } finally {
       setVenueDeleteLoading(false);
+    }
+  };
+
+  const handleSaveVenueSeatMap = async (sections: VenueSeatMapSection[]) => {
+    if (!seatMapVenue) return;
+    setSeatMapLoading(true);
+    setSeatMapError(null);
+    try {
+      const seatMap = await saveVenueSeatMap(apiFetch, seatMapVenue.id, sections);
+      setVenues(current => current.map(venue => venue.id === seatMapVenue.id ? { ...venue, seatMap } : venue));
+      setSeatMapVenue(null);
+    } catch (err) {
+      setSeatMapError(err instanceof Error ? err.message : 'Failed to save the seat map.');
+    } finally {
+      setSeatMapLoading(false);
+    }
+  };
+
+  const handleDeleteVenueSeatMap = async () => {
+    if (!seatMapVenue) return;
+    setSeatMapLoading(true);
+    setSeatMapError(null);
+    try {
+      await deleteVenueSeatMap(apiFetch, seatMapVenue.id);
+      setVenues(current => current.map(venue => venue.id === seatMapVenue.id ? { ...venue, seatMap: null } : venue));
+      setIsSeatMapDeleteOpen(false);
+      setSeatMapVenue(null);
+    } catch (err) {
+      setIsSeatMapDeleteOpen(false);
+      setSeatMapError(err instanceof Error ? err.message : 'Failed to delete the seat map.');
+    } finally {
+      setSeatMapLoading(false);
     }
   };
 
@@ -483,7 +520,7 @@ export const AdminDashboard: React.FC = () => {
           )}
         </div>
         {/* 4. Managed Venues Card Box */}
-        <div className="bg-brand-white border-3 border-ink-black rounded-28 p-8 shadow-soft-3d">
+        <div className="bg-brand-white border-3 border-ink-black rounded-28 p-8 shadow-soft-3d mb-8">
           <div className="flex items-center justify-between mb-6">
             <h2 className="font-heading font-bold text-[20px] text-ink-black">
               Managed Venues
@@ -556,6 +593,14 @@ export const AdminDashboard: React.FC = () => {
                   <div className="font-body font-bold text-[13px] text-brand-blue mt-1">
                     Capacity: {(venue.capacity ?? 0).toLocaleString()}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => { setSeatMapError(null); setSeatMapVenue(venue); }}
+                    className="mt-2 self-start font-body font-bold text-[13px] text-ink-black bg-[#FFE94D] border-2.5 border-ink-black rounded-full px-4 py-2 hover:bg-[#F3DC3C] active:translate-y-[2px] transition-all cursor-pointer shadow-brutal-s flex items-center gap-1.5"
+                  >
+                    <Plus size={14} strokeWidth={3} />
+                    {venue.seatMap ? `Edit Seat Map · ${venue.seatMap.seatCount} seats` : 'Add Seat Map'}
+                  </button>
                 </div>
               ))}
             </div>
@@ -612,6 +657,27 @@ export const AdminDashboard: React.FC = () => {
         initialValues={editingVenue ? { name: editingVenue.name, address: editingVenue.address, capacity: editingVenue.capacity } : undefined}
         isLoading={venueFormLoading}
         error={venueFormError}
+      />
+
+      {seatMapVenue && (
+        <VenueSeatMapPopUp
+          venue={seatMapVenue}
+          isLoading={seatMapLoading}
+          error={seatMapError}
+          onClose={() => setSeatMapVenue(null)}
+          onSubmit={handleSaveVenueSeatMap}
+          onDelete={() => setIsSeatMapDeleteOpen(true)}
+        />
+      )}
+
+      <ConfirmDeletePopUp
+        isOpen={isSeatMapDeleteOpen}
+        onClose={() => setIsSeatMapDeleteOpen(false)}
+        onConfirm={handleDeleteVenueSeatMap}
+        title="Delete Seat Map?"
+        description={<>Delete the reusable seat map for <span className="font-bold text-ink-black">{seatMapVenue?.name}</span>? Existing show layouts will not be changed.</>}
+        confirmText={seatMapLoading ? 'Deleting...' : 'Delete Seat Map'}
+        isLoading={seatMapLoading}
       />
 
       {/* 7. Venue Delete Confirmation Modal */}

@@ -1,0 +1,182 @@
+name: Frontend CD
+
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-cd-dev
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build and deploy frontend to Azure
+    runs-on: ubuntu-24.04
+    environment:
+      name: azure-dev
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Resolve Azure endpoints
+        id: endpoints
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          CONTAINERAPPS_ENV: ${{ vars.CONTAINERAPPS_ENV }}
+        run: |
+          set -euo pipefail
+          : "${AZURE_RESOURCE_GROUP:?Set the AZURE_RESOURCE_GROUP repository variable}"
+          : "${CONTAINERAPPS_ENV:?Set the CONTAINERAPPS_ENV repository variable}"
+
+          domain="$(az containerapp env show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$CONTAINERAPPS_ENV" \
+            --query properties.defaultDomain -o tsv)"
+          gateway_fqdn="$(az containerapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name tickethive-gateway \
+            --query properties.configuration.ingress.fqdn -o tsv)"
+          test -n "$domain" && test "$gateway_fqdn" != "None" && test -n "$gateway_fqdn"
+
+          echo "frontend=https://tickethive-frontend.${domain}" >> "$GITHUB_OUTPUT"
+          echo "gateway=https://${gateway_fqdn}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push image
+        env:
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          GATEWAY_URL: ${{ steps.endpoints.outputs.gateway }}
+          VITE_ASGARDEO_CLIENT_ID: ${{ vars.VITE_ASGARDEO_CLIENT_ID || 'vAVPIdqvfL3f78HtKFBPMLv3Qywa' }}
+        run: |
+          set -euo pipefail
+          : "${ACR_LOGIN_SERVER:?Set the ACR_LOGIN_SERVER repository variable}"
+          acr_name="${ACR_LOGIN_SERVER%%.*}"
+          image="${ACR_LOGIN_SERVER}/tickethive-frontend:${GITHUB_SHA}"
+
+          az acr login --name "$acr_name"
+          docker build \
+            --build-arg "VITE_GATEWAY_URL=${GATEWAY_URL}" \
+            --build-arg "VITE_IDENTITY_API_URL=${GATEWAY_URL}" \
+            --build-arg "VITE_CATALOG_API_URL=${GATEWAY_URL}" \
+            --build-arg "VITE_INVENTORY_API_URL=${GATEWAY_URL}" \
+            --build-arg "VITE_WAITING_ROOM_API_URL=${GATEWAY_URL}" \
+            --build-arg "VITE_BOOKING_API_URL=${GATEWAY_URL}" \
+            --build-arg "VITE_PAYMENT_API_URL=${GATEWAY_URL}" \
+            --build-arg "VITE_NOTIFICATION_API_URL=${GATEWAY_URL}" \
+            --build-arg "VITE_ASGARDEO_CLIENT_ID=${VITE_ASGARDEO_CLIENT_ID}" \
+            --tag "$image" .
+          docker push "$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+        id: image
+
+      - name: Create or update frontend Container App
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          CONTAINERAPPS_ENV: ${{ vars.CONTAINERAPPS_ENV }}
+          ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          set -euo pipefail
+          apps_identity="$(az identity show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name tickethive-apps-mi \
+            --query id -o tsv)"
+          acr_name="${ACR_LOGIN_SERVER%%.*}"
+
+          if az containerapp show --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name tickethive-frontend -o none 2>/dev/null; then
+            az containerapp update \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name tickethive-frontend \
+              --image "$IMAGE" \
+              --min-replicas 1 -o none
+            az containerapp ingress update \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name tickethive-frontend \
+              --type external --target-port 80 -o none
+          else
+            az containerapp create \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --name tickethive-frontend \
+              --environment "$CONTAINERAPPS_ENV" \
+              --image "$IMAGE" \
+              --user-assigned "$apps_identity" \
+              --registry-server "$ACR_LOGIN_SERVER" \
+              --registry-identity "$apps_identity" \
+              --ingress external --target-port 80 \
+              --cpu 0.25 --memory 0.5Gi \
+              --min-replicas 1 --max-replicas 2 -o none
+          fi
+
+      - name: Configure gateway CORS and payment return URLs
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          FRONTEND_URL: ${{ steps.endpoints.outputs.frontend }}
+        run: |
+          set -euo pipefail
+          az containerapp update \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name tickethive-gateway \
+            --set-env-vars "Cors__AllowedOrigins=${FRONTEND_URL},http://localhost:5173" -o none
+          az containerapp update \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name tickethive-payment \
+            --set-env-vars \
+              "PayHere__ReturnUrl=${FRONTEND_URL}/checkout" \
+              "PayHere__CancelUrl=${FRONTEND_URL}/checkout" -o none
+
+      - name: Verify frontend, deep links, gateway, and CORS
+        env:
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          FRONTEND_URL: ${{ steps.endpoints.outputs.frontend }}
+          GATEWAY_URL: ${{ steps.endpoints.outputs.gateway }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 12 --retry-delay 10 \
+            --retry-connrefused --max-time 30 "${FRONTEND_URL}/" -o /dev/null
+          curl --fail --silent --show-error --retry 6 --retry-delay 5 \
+            --retry-connrefused --max-time 30 "${FRONTEND_URL}/checkout/ci-smoke" -o /dev/null
+          curl --fail --silent --show-error --retry 8 --retry-delay 10 \
+            --retry-connrefused --max-time 30 "${GATEWAY_URL}/health/ready" -o /dev/null
+
+          headers="$(mktemp)"
+          trap 'rm -f "$headers"' EXIT
+          curl --fail --silent --show-error --max-time 60 \
+            --output /dev/null --dump-header "$headers" --request OPTIONS \
+            "${GATEWAY_URL}/api/catalog/events" \
+            --header "Origin: ${FRONTEND_URL}" \
+            --header 'Access-Control-Request-Method: GET'
+          if ! grep -qiF "access-control-allow-origin: ${FRONTEND_URL}" "$headers"; then
+            echo "Gateway did not allow CORS from ${FRONTEND_URL}" >&2
+            cat "$headers" >&2
+            exit 1
+          fi
+          echo "Frontend deployment verified at ${FRONTEND_URL}"

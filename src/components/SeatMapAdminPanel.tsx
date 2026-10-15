@@ -8,7 +8,9 @@ import {
   type SeatMapDetail,
   type SeatMapRequestStatus,
   type SeatMapRequestSummary,
+  type SeatLayoutSection,
 } from '../common/seatMapApi';
+import { fetchVenue } from '../common/venueApi';
 
 type Filter = SeatMapRequestStatus | 'All';
 
@@ -26,6 +28,7 @@ export const SeatMapAdminPanel: React.FC = () => {
   const [detail, setDetail] = useState<SeatMapDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [venueTemplate, setVenueTemplate] = useState<SeatLayoutSection[] | undefined>();
 
   const loadList = useCallback(async () => {
     setLoading(true);
@@ -48,7 +51,17 @@ export const SeatMapAdminPanel: React.FC = () => {
       setDetailLoading(true);
       setDetailError(null);
       try {
-        setDetail(await fetchSeatMapDetail(apiFetch, requestId));
+        const loaded = await fetchSeatMapDetail(apiFetch, requestId);
+        setDetail(loaded);
+        setVenueTemplate(undefined);
+        if (loaded.venueId && loaded.layouts.length === 0) {
+          try {
+            const venue = await fetchVenue(apiFetch, loaded.venueId);
+            setVenueTemplate(venue.seatMap?.spec.sections.map(section => ({ ...section, categoryId: '' })));
+          } catch {
+            // Venue templates are optional; admins can still build this show layout manually.
+          }
+        }
       } catch (err) {
         setDetail(null);
         setDetailError(err instanceof Error ? err.message : 'Failed to load the seat map request.');
@@ -63,34 +76,6 @@ export const SeatMapAdminPanel: React.FC = () => {
     if (detail) void openRequest(detail.request.id);
     void loadList();
   }, [detail, openRequest, loadList]);
-
-  if (detail || detailLoading || detailError) {
-    return (
-      <div className="flex flex-col gap-4">
-        <button
-          type="button"
-          onClick={() => {
-            setDetail(null);
-            setDetailError(null);
-          }}
-          className="self-start font-body font-bold text-[14px] text-brand-blue cursor-pointer"
-        >
-          ← Back to seat map requests
-        </button>
-        {detailLoading && !detail && (
-          <div className="py-8 flex justify-center" role="status" aria-label="Loading seat map request">
-            <div className="w-10 h-10 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
-        {detailError && (
-          <div role="alert" className="bg-red-50 border-2 border-red-500 rounded-16 p-4 text-[#FF3B3B] font-medium text-sm">
-            {detailError}
-          </div>
-        )}
-        {detail && <SeatLayoutBuilder key={detail.request.id} detail={detail} onChanged={handleChanged} />}
-      </div>
-    );
-  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -147,13 +132,26 @@ export const SeatMapAdminPanel: React.FC = () => {
                 type="button"
                 onClick={() => void openRequest(request.id)}
                 aria-label={`${request.status === 'Pending' ? 'Build layout for' : 'View'} ${eventName}`}
-                className="shrink-0 font-body font-bold text-[14px] text-brand-white bg-brand-blue border-2.5 border-ink-black rounded-full px-5 py-2 hover:bg-[#1a1a5b] cursor-pointer"
+                className="shrink-0 font-body font-bold text-[14px] text-ink-black bg-[#FFE94D] border-2.5 border-ink-black rounded-full px-5 py-2 hover:bg-[#F3DC3C] cursor-pointer shadow-brutal-s hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all"
               >
                 {request.status === 'Pending' ? 'Build layout' : 'View'}
               </button>
             </li>
           ))}
         </ul>
+      )}
+
+      {(detail || detailLoading || detailError) && (
+        <div className="fixed inset-0 z-[190] flex items-center justify-center p-6 bg-[#0A0A0F]/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+          <div role="dialog" aria-modal="true" aria-labelledby="seat-layout-dialog-title" className="bg-brand-white border-3 border-ink-black rounded-32 shadow-soft-3d w-full max-w-6xl my-8 p-8 relative animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto no-scrollbar">
+            <button type="button" onClick={() => { setDetail(null); setDetailError(null); }} aria-label="Close layout builder" className="absolute top-4 right-4 w-8 h-8 rounded-full border-2 border-ink-black flex items-center justify-center cursor-pointer hover:bg-brand-blue-light">✕</button>
+            <h2 id="seat-layout-dialog-title" className="font-heading font-bold text-[24px] text-ink-black mb-1">Build Seat Layout</h2>
+            <p className="text-xs text-ink-gray-70 mb-5 border-b border-ink-gray-30 pb-3">Create and manage the layout using the same focused popup flow as adding a venue.</p>
+            {detailLoading && !detail && <div className="py-8 flex justify-center" role="status" aria-label="Loading seat map request"><div className="w-10 h-10 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div></div>}
+            {detailError && <div role="alert" className="bg-red-50 border-2 border-red-500 rounded-16 p-4 text-[#FF3B3B] font-medium text-sm">{detailError}</div>}
+            {detail && <SeatLayoutBuilder key={detail.request.id} detail={detail} initialSections={venueTemplate} onChanged={handleChanged} />}
+          </div>
+        </div>
       )}
     </div>
   );
