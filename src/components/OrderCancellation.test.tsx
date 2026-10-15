@@ -10,19 +10,17 @@ describe('order cancellation', () => {
   beforeEach(() => apiFetch.mockReset());
 
   it('requires confirmation and presents the explicit simulated refund outcome', async () => {
-    apiFetch.mockResolvedValueOnce(new Response('', { status: 404 }));
     apiFetch.mockResolvedValueOnce(Response.json({ refundStatus: 'Simulated', inventoryReturned: true, notificationStatus: 'Simulated' }));
     const onCancelled = vi.fn();
     render(<OrderCancellation orderId="order-1" onCancelled={onCancelled} />);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel Order' }));
-    expect(apiFetch).toHaveBeenCalledTimes(1);
+    expect(apiFetch).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Confirm cancellation' }));
     await waitFor(() => expect(onCancelled).toHaveBeenCalledOnce());
     expect(screen.queryByRole('button', { name: 'Cancel Order' })).not.toBeInTheDocument();
   });
 
   it('shows eligibility refusal and permits a retry without claiming cancellation', async () => {
-    apiFetch.mockResolvedValueOnce(new Response('', { status: 404 }));
     apiFetch.mockResolvedValueOnce(Response.json({ detail: 'TicketUsed' }, { status: 409 }));
     render(<OrderCancellation orderId="order-2" />);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel Order' }));

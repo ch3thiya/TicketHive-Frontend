@@ -83,16 +83,21 @@ async function openBuilder(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByRole('region', { name: 'Layout' });
 }
 
+async function selectCategory(user: ReturnType<typeof userEvent.setup>, section: number, category: string) {
+  await user.click(screen.getByLabelText(`Section ${section} category`));
+  await user.click(screen.getByRole('option', { name: new RegExp(`^${category}`, 'i') }));
+}
+
 async function fillValidLayout(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Section 1 name'), 'Front');
-  await user.selectOptions(screen.getByLabelText('Section 1 category'), 'vip');
+  await selectCategory(user, 1, 'VIP');
   await user.clear(screen.getByLabelText('Section 1 rows'));
   await user.type(screen.getByLabelText('Section 1 rows'), '2');
   await user.clear(screen.getByLabelText('Section 1 seats per row'));
   await user.type(screen.getByLabelText('Section 1 seats per row'), '3');
   await user.click(screen.getByRole('button', { name: /add section/i }));
   await user.type(screen.getByLabelText('Section 2 name'), 'Hall');
-  await user.selectOptions(screen.getByLabelText('Section 2 category'), 'gen');
+  await selectCategory(user, 2, 'General');
   await user.clear(screen.getByLabelText('Section 2 rows'));
   await user.type(screen.getByLabelText('Section 2 rows'), '3');
   await user.clear(screen.getByLabelText('Section 2 seats per row'));
@@ -166,7 +171,7 @@ describe('seat layout builder', () => {
     const user = userEvent.setup();
     await openBuilder(user);
     await user.type(screen.getByLabelText('Section 1 name'), 'Front');
-    await user.selectOptions(screen.getByLabelText('Section 1 category'), 'vip');
+    await selectCategory(user, 1, 'VIP');
     await user.clear(screen.getByLabelText('Section 1 rows'));
     await user.type(screen.getByLabelText('Section 1 rows'), '6');
     await user.clear(screen.getByLabelText('Section 1 seats per row'));
