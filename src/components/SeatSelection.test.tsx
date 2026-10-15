@@ -63,12 +63,12 @@ describe('SeatSelection', () => {
   it('shows every seat with its category, price and state', async () => {
     setup();
 
-    expect(await seatButton(/Front row A seat 1, VIP, \$120, available/)).toBeEnabled();
-    expect(screen.getByRole('button', { name: /Hall row A seat 2, General, \$40, available/ })).toBeEnabled();
-    const sold = screen.getByRole('button', { name: /Front row A seat 3, VIP, \$120, sold/ });
+    expect(await seatButton(/Front row A seat 1, VIP, Rs\. 120\.00 LKR, available/)).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Hall row A seat 2, General, Rs\. 40\.00 LKR, available/ })).toBeEnabled();
+    const sold = screen.getByRole('button', { name: /Front row A seat 3, VIP, Rs\. 120\.00 LKR, sold/ });
     expect(sold).toBeDisabled();
     expect(screen.getByRole('list', { name: 'Seat key' })).toHaveTextContent('Held by someone else');
-    expect(screen.getByRole('list', { name: 'Prices' })).toHaveTextContent('VIP $120');
+    expect(screen.getByRole('list', { name: 'Prices' })).toHaveTextContent('VIP Rs. 120.00 LKR');
   });
 
   it('adds selected seats to a summary with a running total and lets them be removed', async () => {
@@ -78,11 +78,11 @@ describe('SeatSelection', () => {
     await user.click(screen.getByRole('button', { name: /Hall row A seat 2/ }));
 
     const list = screen.getByRole('list', { name: 'Selected seats' });
-    expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Front A1 · VIP$120', 'Hall A2 · General$40']);
-    expect(screen.getByText('Total').parentElement).toHaveTextContent('$160');
+    expect(within(list).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Front A1 · VIPRs. 120.00 LKR', 'Hall A2 · GeneralRs. 40.00 LKR']);
+    expect(screen.getByText('Total').parentElement).toHaveTextContent('Rs. 160.00 LKR');
     expect(screen.getByRole('button', { name: 'Hold 2 seats' })).toBeEnabled();
 
-    await user.click(screen.getByRole('button', { name: /Front row A seat 1, VIP, \$120, selected/ }));
+    await user.click(screen.getByRole('button', { name: /Front row A seat 1, VIP, Rs\. 120\.00 LKR, selected/ }));
     expect(screen.getByRole('button', { name: 'Hold 1 seat' })).toBeEnabled();
   });
 
@@ -100,22 +100,22 @@ describe('SeatSelection', () => {
   it('updates other customers\' holds without a page refresh', async () => {
     let taken: { id: string; state: string }[] = [];
     setup({}, () => taken);
-    const target = await seatButton(/Hall row A seat 1, General, \$40, available/);
+    const target = await seatButton(/Hall row A seat 1, General, Rs\. 40\.00 LKR, available/);
     expect(target).toBeEnabled();
 
     taken = [{ id: 'h-a1', state: 'Held' }];
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /Hall row A seat 1, General, \$40, held by someone else/ })).toBeDisabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: /Hall row A seat 1, General, Rs\. 40\.00 LKR, held by someone else/ })).toBeDisabled());
   });
 
   it('frees a seat again when its hold goes away', async () => {
     let taken: { id: string; state: string }[] = [{ id: 'h-a1', state: 'Held' }];
     setup({}, () => taken);
-    await screen.findByRole('button', { name: /Hall row A seat 1, General, \$40, held by someone else/ });
+    await screen.findByRole('button', { name: /Hall row A seat 1, General, Rs\. 40\.00 LKR, held by someone else/ });
 
     taken = [];
 
-    await waitFor(() => expect(screen.getByRole('button', { name: /Hall row A seat 1, General, \$40, available/ })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: /Hall row A seat 1, General, Rs\. 40\.00 LKR, available/ })).toBeEnabled());
   });
 
   it('removes a selected seat that someone else just took and tells the customer', async () => {
@@ -165,7 +165,7 @@ describe('SeatSelection', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Front A2 is no longer available. No seats were held; choose again.');
     expect(screen.getByRole('list', { name: 'Selected seats' })).toHaveTextContent('Front A1');
     expect(screen.getByRole('list', { name: 'Selected seats' })).not.toHaveTextContent('Front A2');
-    expect(screen.getByRole('button', { name: /Front row A seat 2, VIP, \$120, held by someone else/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Front row A seat 2, VIP, Rs\. 120\.00 LKR, held by someone else/ })).toBeDisabled();
   });
 
   it('shows a failure message and keeps the selection', async () => {
