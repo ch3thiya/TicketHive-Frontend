@@ -60,6 +60,7 @@ export interface SeatMapDetail {
   showDate: string;
   showTime: string;
   seatingMode: 'GA' | 'Seated';
+  venueId: string | null;
   categories: SeatMapCategory[];
   layouts: SeatLayout[];
 }
@@ -122,6 +123,11 @@ export async function createSeatLayoutDraft(apiFetch: ApiFetch, requestId: strin
 
 export async function enableSeatLayout(apiFetch: ApiFetch, layoutId: string): Promise<SeatLayout> {
   return read(await apiFetch(`${BASE}/admin/seat-layouts/${layoutId}/enable`, { method: 'POST' }), 'Failed to enable the layout.');
+}
+
+export async function deleteSeatLayout(apiFetch: ApiFetch, layoutId: string): Promise<void> {
+  const response = await apiFetch(`${BASE}/admin/seat-layouts/${layoutId}`, { method: 'DELETE' });
+  if (!response.ok) throw await toApiError(response, 'Failed to delete the seat map.');
 }
 
 export async function rejectSeatMapRequest(apiFetch: ApiFetch, requestId: string, reason: string): Promise<SeatMapRequest> {

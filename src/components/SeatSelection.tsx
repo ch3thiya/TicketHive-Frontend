@@ -35,6 +35,7 @@ interface SeatSelectionProps {
 }
 
 const DEFAULT_POLL_MS = 3000;
+const money = (value: number) => `Rs. ${value.toFixed(2)} LKR`;
 // Spread polls out so many open tabs do not refresh in lockstep.
 const withJitter = (ms: number) => Math.round(ms * (0.85 + Math.random() * 0.3));
 
@@ -242,14 +243,14 @@ export const SeatSelection: React.FC<SeatSelectionProps> = ({
                 <span>
                   {seatLabel(seat)} · {categories[seat.categoryId]?.name ?? 'Ticket'}
                 </span>
-                <span className="font-bold">${seat.price.toFixed(0)}</span>
+                <span className="font-bold">{money(seat.price)}</span>
               </li>
             ))}
           </ul>
         )}
         <div className="flex items-center justify-between font-heading font-extrabold text-base text-ink-black pt-1">
           <span>Total</span>
-          <span>${total.toFixed(0)}</span>
+          <span>{money(total)}</span>
         </div>
         <button
           type="button"

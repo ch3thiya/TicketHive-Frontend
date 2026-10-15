@@ -2,10 +2,13 @@ import React, { useMemo, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { Badge } from './Badge';
+import { TicketCategorySelect } from './TicketCategorySelect';
 import { RejectSeatMapPopUp } from '../popUps/RejectSeatMapPopUp';
+import { ConfirmDeletePopUp } from '../popUps/ConfirmDeletePopUp';
 import { ApiError } from '../common/problemDetails';
 import {
   createSeatLayoutDraft,
+  deleteSeatLayout,
   enableSeatLayout,
   rejectSeatMapRequest,
   rowLabel,
@@ -20,11 +23,12 @@ interface SeatLayoutBuilderProps {
   detail: SeatMapDetail;
   // Called after anything changed on the server, so the parent reloads the request and the list.
   onChanged: () => void;
+  initialSections?: SeatLayoutSection[];
 }
 
 const emptySection = (): SeatLayoutSection => ({ name: '', categoryId: '', rows: 1, seatsPerRow: 1 });
 
-function initialSections(layouts: SeatLayout[]): SeatLayoutSection[] {
+function sectionsFromLayouts(layouts: SeatLayout[]): SeatLayoutSection[] {
   const base = layouts.find((l) => l.status === 'Draft') ?? layouts.find((l) => l.status === 'Enabled');
   return base ? base.spec.sections.map((s) => ({ ...s })) : [emptySection()];
 }
@@ -42,15 +46,17 @@ const toFailure = (err: unknown, fallback: string): Failure =>
 const inputClass =
   'font-body text-[14px] text-ink-black border-2 border-ink-black rounded-12 px-3 py-2 outline-none focus:border-brand-blue bg-brand-white';
 
-export const SeatLayoutBuilder: React.FC<SeatLayoutBuilderProps> = ({ detail, onChanged }) => {
+export const SeatLayoutBuilder: React.FC<SeatLayoutBuilderProps> = ({ detail, onChanged, initialSections }) => {
   const { apiFetch } = useAuth();
   const { request, categories, layouts } = detail;
-  const [sections, setSections] = useState<SeatLayoutSection[]>(() => initialSections(layouts));
+  const [sections, setSections] = useState<SeatLayoutSection[]>(() =>
+    layouts.length > 0 ? sectionsFromLayouts(layouts) : initialSections?.map(section => ({ ...section })) ?? [emptySection()]);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectError, setRejectError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SeatLayout | null>(null);
 
   const summary = useMemo(() => summarizeLayout(sections, categories), [sections, categories]);
   const open = request.status !== 'Rejected';
@@ -95,6 +101,22 @@ export const SeatLayoutBuilder: React.FC<SeatLayoutBuilderProps> = ({ detail, on
       onChanged();
     } catch (err) {
       setRejectError(toFailure(err, 'Failed to reject the request.').message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeLayout = async () => {
+    if (!deleteTarget) return;
+    setBusy(true);
+    setFailure(null);
+    try {
+      await deleteSeatLayout(apiFetch, deleteTarget.id);
+      setDeleteTarget(null);
+      onChanged();
+    } catch (err) {
+      setDeleteTarget(null);
+      setFailure(toFailure(err, 'Failed to delete the seat map.'));
     } finally {
       setBusy(false);
     }
@@ -157,19 +179,12 @@ export const SeatLayoutBuilder: React.FC<SeatLayoutBuilderProps> = ({ detail, on
               </label>
               <label className="flex flex-col gap-1 font-body text-[12px] font-bold text-ink-black col-span-2 md:col-span-1">
                 Ticket category
-                <select
-                  aria-label={`Section ${index + 1} category`}
-                  className={inputClass}
+                <TicketCategorySelect
+                  ariaLabel={`Section ${index + 1} category`}
+                  categories={categories}
                   value={section.categoryId}
-                  onChange={(e) => update(index, { categoryId: e.target.value })}
-                >
-                  <option value="">Choose a category</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name} ({category.capacity})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(categoryId) => update(index, { categoryId })}
+                />
               </label>
               <label className="flex flex-col gap-1 font-body text-[12px] font-bold text-ink-black">
                 Rows
@@ -285,13 +300,6 @@ export const SeatLayoutBuilder: React.FC<SeatLayoutBuilderProps> = ({ detail, on
                   </Badge>
                 </span>
                 <span className="flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setSections(layout.spec.sections.map((s) => ({ ...s })))}
-                    className="font-body font-bold text-[13px] text-brand-blue cursor-pointer"
-                  >
-                    Load version {layout.version}
-                  </button>
                   {layout.status === 'Draft' && open && (
                     <button
                       type="button"
@@ -300,6 +308,16 @@ export const SeatLayoutBuilder: React.FC<SeatLayoutBuilderProps> = ({ detail, on
                       className="font-body font-bold text-[13px] text-brand-white bg-brand-blue border-2 border-ink-black rounded-full px-4 py-1 cursor-pointer disabled:opacity-50"
                     >
                       Enable version {layout.version}
+                    </button>
+                  )}
+                  {layout.status !== 'Enabled' && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(layout)}
+                      disabled={busy}
+                      className="font-body font-bold text-[13px] text-[#FF3B3B] bg-brand-white border-2 border-ink-black rounded-full px-4 py-1 cursor-pointer disabled:opacity-50"
+                    >
+                      Delete
                     </button>
                   )}
                 </span>
@@ -318,6 +336,15 @@ export const SeatLayoutBuilder: React.FC<SeatLayoutBuilderProps> = ({ detail, on
           onConfirm={(reason) => void reject(reason)}
         />
       )}
+      <ConfirmDeletePopUp
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={() => void removeLayout()}
+        title="Delete Seat Map?"
+        description={`Delete version ${deleteTarget?.version}? This cannot be undone.`}
+        confirmText="Delete Seat Map"
+        isLoading={busy}
+      />
     </div>
   );
 };

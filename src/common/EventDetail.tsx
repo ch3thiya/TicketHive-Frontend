@@ -139,9 +139,10 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const [availabilityMap, setAvailabilityMap] = useState<Record<string, AvailabilityEntry>>({});
   const [availabilityStatus, setAvailabilityStatus] = useState<AvailabilityStatus>('loading');
 
-  // The page always displays shows[0] today (see handoff) — this follows whichever show
-  // is on screen without needing a show-switcher.
-  const activeShowId = event?.shows && event.shows.length > 0 ? event.shows[0].id : null;
+  // Cancelled shows remain in organizer history, so customer purchase state must
+  // follow the first sellable show rather than whichever record sorts first.
+  const activeShow = event?.shows?.find(show => show.status !== 'Cancelled') ?? null;
+  const activeShowId = activeShow?.id ?? null;
 
   useEffect(() => {
     if (!isAuthenticated || !activeShowId) return;
@@ -152,7 +153,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
         const holdRes = await apiFetch(`${GATEWAY_URL}/api/inventory/holds/active?showId=${activeShowId}`);
         if (holdRes.ok && holdRes.status === 200) {
           const holdData = await holdRes.json();
-          const categories = event?.shows?.[0]?.ticketCategories || [
+          const categories = activeShow?.ticketCategories || [
             { id: 'cat-1', name: 'General Admission', price: 85, capacity: 1500 },
           ];
           const selectedCat = categories.find((c) => (c.id || c.name) === holdData.items[0]?.categoryId) || categories[0];
@@ -194,7 +195,7 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     };
 
     restoreActiveState();
-  }, [isAuthenticated, activeShowId, apiFetch, event]);
+  }, [isAuthenticated, activeShowId, apiFetch, activeShow]);
 
   useEffect(() => {
     if (!activeShowId) {
@@ -379,7 +380,6 @@ export const EventDetail: React.FC<EventDetailProps> = ({
   const coverImage = displayEvent.coverImageUrl || displayEvent.coverUrl || (displayEvent.bannerUrl !== posterImage ? displayEvent.bannerUrl : null);
 
   // Extract active show and ticket categories
-  const activeShow = displayEvent.shows && displayEvent.shows.length > 0 ? displayEvent.shows[0] : null;
   const ticketCategories =
     activeShow && activeShow.ticketCategories && activeShow.ticketCategories.length > 0
       ? activeShow.ticketCategories
@@ -974,4 +974,3 @@ export const EventDetail: React.FC<EventDetailProps> = ({
     </div>
   );
 };
-
